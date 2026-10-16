@@ -1,0 +1,17 @@
+
+# Installed dependencies
+node_modules/
+
+# Compiled application files
+dist/
+
+# Environment files containing secrets
+.env
+.env.*
+!.env.example
+
+# Automated test coverage reports
+coverage/
+
+# Application log files
+*.log
