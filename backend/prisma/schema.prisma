@@ -1,0 +1,42 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+
+generator client {
+  // Generate Prisma Client as TypeScript code.
+  provider = "prisma-client"
+
+  // Keep generated code inside our NestJS src folder.
+  output = "../src/generated/prisma"
+
+  // Use ES Modules, matching our NestJS setup.
+  moduleFormat = "esm"
+}
+
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// Represents a registered user of TaskFlow.
+model User {
+  // Unique identifier for each user.
+  id String @id @default(uuid())
+
+  // User's full name.
+  name String
+
+  // Email addresses must be unique.
+  email String @unique
+
+  // Store a secure password hash, never plaintext.
+  passwordHash String
+
+  // Automatically record when the user was created.
+  createdAt DateTime @default(now())
+
+  // Automatically update when the user changes.
+  updatedAt DateTime @updatedAt
+}
