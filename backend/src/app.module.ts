@@ -5,10 +5,11 @@ import { createObserveModule } from '@nestjs/observe';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 
-import { PrismaService } from './prisma/prisma.service.js';
-
 import { DatabaseHealthController } from './database-health.controller.js';
 import { DatabaseHealthService } from './database-health.service.js';
+
+import { AuthModule } from './auth/auth.module.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 
 // Initialize the optional NestJS monitoring module.
 export const { ObserveModule, ObserveInstrument } =
@@ -22,6 +23,13 @@ export const { ObserveModule, ObserveInstrument } =
       appSecret: 'YOUR_APP_SECRET',
       serviceId: 'backend',
     }),
+
+    // Authentication module handles registration and login.
+    AuthModule,
+
+    // Makes the exported PrismaService available
+    // to services inside AppModule.
+    PrismaModule,
   ],
 
   // Controllers handle incoming HTTP requests.
@@ -30,11 +38,9 @@ export const { ObserveModule, ObserveInstrument } =
     DatabaseHealthController,
   ],
 
-  // Providers contain application logic and
-  // database functionality.
+  // Providers contain injectable application services.
   providers: [
     AppService,
-    PrismaService,
     DatabaseHealthService,
   ],
 })
