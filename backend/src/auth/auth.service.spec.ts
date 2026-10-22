@@ -4,7 +4,9 @@ import {
   ConflictException,
 } from '@nestjs/common';
 
+import { JwtService } from '@nestjs/jwt';
 import { Test, type TestingModule } from '@nestjs/testing';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Prisma } from '../generated/prisma/client.js';
@@ -14,8 +16,12 @@ import { AuthService } from './auth.service.js';
 describe('AuthService', () => {
   let service: AuthService;
 
+  // =====================================================
+  // MOCK PRISMA DATABASE
+  // =====================================================
+
   // Mock database operations so tests do not
-  // need to connect to a real PostgreSQL database.
+  // connect to a real PostgreSQL database.
   const prismaMock = {
     user: {
       findUnique: vi.fn(),
@@ -23,24 +29,46 @@ describe('AuthService', () => {
     },
   };
 
+  // =====================================================
+  // MOCK JWT SERVICE
+  // =====================================================
+
+  // Mock JWT token generation so tests do not
+  // depend on actual authentication secrets.
+  const jwtMock = {
+    signAsync: vi.fn(),
+  };
+
+  // =====================================================
+  // TEST SETUP
+  // =====================================================
+
   beforeEach(async () => {
-    // Clear previous mock calls and return values.
-    // This ensures that tests do not affect each other.
+    // Reset all mock calls and return values.
+    // This keeps tests independent.
     vi.resetAllMocks();
 
+    // Create a NestJS testing module.
     const module: TestingModule =
       await Test.createTestingModule({
         providers: [
           AuthService,
 
-          // Replace the real PrismaService with our mock.
+          // Replace real PrismaService with a mock.
           {
             provide: PrismaService,
             useValue: prismaMock,
           },
+
+          // Replace real JwtService with a mock.
+          {
+            provide: JwtService,
+            useValue: jwtMock,
+          },
         ],
       }).compile();
 
+    // Retrieve AuthService from the testing module.
     service = module.get<AuthService>(AuthService);
   });
 
@@ -60,7 +88,7 @@ describe('AuthService', () => {
     // Simulate an email that does not already exist.
     prismaMock.user.findUnique.mockResolvedValue(null);
 
-    // Simulate the public user data returned by Prisma.
+    // Simulate public user data returned by Prisma.
     const createdUser = {
       id: 'test-user-id',
       name: 'Alice Example',
@@ -70,14 +98,14 @@ describe('AuthService', () => {
 
     prismaMock.user.create.mockResolvedValue(createdUser);
 
-    // Attempt to register the user.
+    // Attempt to register a new user.
     const result = await service.register({
       name: '  Alice Example  ',
       email: 'ALICE@example.com',
       password: 'SecurePassword123!',
     });
 
-    // Verify that the email was converted to lowercase.
+    // Verify that email normalization works.
     expect(prismaMock.user.findUnique).toHaveBeenCalledWith({
       where: {
         email: 'alice@example.com',
@@ -99,15 +127,15 @@ describe('AuthService', () => {
       'alice@example.com',
     );
 
-    // Verify that plaintext passwords are not saved.
+    // Ensure the password was hashed before saving.
     expect(createArguments.data.passwordHash).not.toBe(
       'SecurePassword123!',
     );
 
-    // Verify that only safe user information is returned.
+    // Verify that only public user information is returned.
     expect(result).toEqual(createdUser);
 
-    // Passwords must never appear in API responses.
+    // Never expose passwords or password hashes.
     expect(result).not.toHaveProperty('password');
     expect(result).not.toHaveProperty('passwordHash');
   });
@@ -117,12 +145,12 @@ describe('AuthService', () => {
   // =====================================================
 
   it('should reject an email that is already registered', async () => {
-    // Simulate an existing user in PostgreSQL.
+    // Simulate an existing user.
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'existing-user-id',
     });
 
-    // Attempt to register using the existing email.
+    // Registration must fail with HTTP 409 Conflict.
     await expect(
       service.register({
         name: 'Alice Example',
@@ -131,7 +159,7 @@ describe('AuthService', () => {
       }),
     ).rejects.toThrow(ConflictException);
 
-    // No new user should be inserted into the database.
+    // No new database record should be created.
     expect(prismaMock.user.create).not.toHaveBeenCalled();
   });
 
@@ -140,8 +168,7 @@ describe('AuthService', () => {
   // =====================================================
 
   it('should reject whitespace-only names', async () => {
-    // A name containing only spaces should be rejected
-    // after AuthService removes surrounding whitespace.
+    // Names consisting entirely of spaces are invalid.
     await expect(
       service.register({
         name: '     ',
@@ -150,7 +177,7 @@ describe('AuthService', () => {
       }),
     ).rejects.toThrow(BadRequestException);
 
-    // Invalid names should not trigger database operations.
+    // Invalid names must not trigger database operations.
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
 
     expect(prismaMock.user.create).not.toHaveBeenCalled();
@@ -161,15 +188,15 @@ describe('AuthService', () => {
   // =====================================================
 
   it('should reject passwords longer than 72 UTF-8 bytes', async () => {
-    // Each 'é' occupies 2 bytes in UTF-8.
-    // 37 characters therefore occupy 74 bytes.
-    const longPassword = 'é'.repeat(37);
+    // The character represented by \u00E9 uses
+    // two bytes in UTF-8.
+    // 37 such characters therefore occupy 74 bytes.
+    const longPassword = '\u00E9'.repeat(37);
 
-    // Verify our test password actually exceeds 72 bytes.
+    // Confirm the password exceeds bcrypt's limit.
     expect(Buffer.byteLength(longPassword, 'utf8')).toBe(74);
 
-    // AuthService must reject passwords exceeding
-    // bcrypt's 72-byte input limit.
+    // Registration must reject oversized passwords.
     await expect(
       service.register({
         name: 'Alice Example',
@@ -189,12 +216,10 @@ describe('AuthService', () => {
   // =====================================================
 
   it('should handle a concurrent duplicate email conflict', async () => {
-    // Simulate our initial email check finding no user.
+    // Simulate an initial email check finding no user.
     prismaMock.user.findUnique.mockResolvedValue(null);
 
-    // Simulate PostgreSQL rejecting the insertion because
-    // another registration request inserted this email
-    // between our initial check and create operation.
+    // Simulate PostgreSQL rejecting a duplicate email.
     prismaMock.user.create.mockRejectedValue(
       new Prisma.PrismaClientKnownRequestError(
         'Unique constraint failed on email',
@@ -208,8 +233,7 @@ describe('AuthService', () => {
       ),
     );
 
-    // AuthService should translate the Prisma P2002
-    // error into an HTTP 409 Conflict exception.
+    // AuthService must translate P2002 into HTTP 409.
     await expect(
       service.register({
         name: 'Alice Example',
@@ -218,7 +242,7 @@ describe('AuthService', () => {
       }),
     ).rejects.toThrow(ConflictException);
 
-    // Verify that the database insertion was attempted.
+    // Confirm a database insertion was attempted.
     expect(prismaMock.user.create).toHaveBeenCalledOnce();
   });
 });
