@@ -3,23 +3,39 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 
-import { hash } from 'bcryptjs';
+import { JwtService } from '@nestjs/jwt';
+import { compare, hash } from 'bcryptjs';
 
 import { Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+
 import { RegisterDto } from './dto/register.dto.js';
+import { LoginDto } from './dto/login.dto.js';
 
 @Injectable()
 export class AuthService {
-  // NestJS injects our reusable database service.
-  constructor(private readonly prisma: PrismaService) {}
+  // =====================================================
+  // DEPENDENCY INJECTION
+  // =====================================================
+
+  // PrismaService handles PostgreSQL database operations.
+  // JwtService generates signed authentication tokens.
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly jwtService: JwtService,
+  ) {}
+
+  // =====================================================
+  // USER REGISTRATION
+  // =====================================================
 
   // Registers a new TaskFlow user.
   async register(registrationData: RegisterDto) {
-    // Remove surrounding spaces from the name and email.
-    // Email addresses are normalized to lowercase for consistency.
+    // Remove surrounding spaces from name and email.
+    // Normalize email to lowercase.
     const name = registrationData.name.trim();
     const email = registrationData.email.trim().toLowerCase();
 
@@ -38,21 +54,25 @@ export class AuthService {
       );
     }
 
-    // Check whether this email address is already registered.
+    // Check whether this email already exists.
     const existingUser = await this.prisma.user.findUnique({
       where: { email },
       select: { id: true },
     });
 
+    // Prevent duplicate email registration.
     if (existingUser) {
       throw new ConflictException(
         'An account with this email already exists.',
       );
     }
 
-    // Hash the password before saving it.
-    // 12 is the bcrypt cost factor.
-    const passwordHash = await hash(registrationData.password, 12);
+    // Hash the password securely before saving.
+    // Cost factor 12 makes brute-force attacks more expensive.
+    const passwordHash = await hash(
+      registrationData.password,
+      12,
+    );
 
     try {
       // Create the user in PostgreSQL through Prisma.
@@ -63,8 +83,8 @@ export class AuthService {
           passwordHash,
         },
 
-        // Return only safe public fields.
-        // Never include passwordHash in an API response.
+        // Return only safe public information.
+        // Never expose the password hash.
         select: {
           id: true,
           name: true,
@@ -73,9 +93,8 @@ export class AuthService {
         },
       });
     } catch (error) {
-      // The database enforces email uniqueness too.
-      // Handle another request registering the same email
-      // between our initial check and the database insert.
+      // Handle concurrent registration requests.
+      // PostgreSQL enforces email uniqueness.
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
@@ -85,8 +104,102 @@ export class AuthService {
         );
       }
 
-      // Let NestJS handle any unexpected database errors.
+      // Allow NestJS to handle unexpected errors.
       throw error;
     }
+  }
+
+  // =====================================================
+  // USER LOGIN
+  // =====================================================
+
+  // Authenticates an existing TaskFlow user.
+  async login(loginData: LoginDto) {
+    // Normalize email exactly as we do during registration.
+    const email = loginData.email.trim().toLowerCase();
+
+    // Reject passwords exceeding bcrypt's 72-byte limit.
+    // Return a generic authentication error.
+    if (Buffer.byteLength(loginData.password, 'utf8') > 72) {
+      throw new UnauthorizedException(
+        'Invalid email or password.',
+      );
+    }
+
+    // ===================================================
+    // STEP 1: FIND USER IN DATABASE
+    // ===================================================
+
+    // Search PostgreSQL for the supplied email.
+    const user = await this.prisma.user.findUnique({
+      where: { email },
+
+      // Retrieve only the fields required for login.
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        passwordHash: true,
+        createdAt: true,
+      },
+    });
+
+    // Do not reveal whether an email is registered.
+    if (!user) {
+      throw new UnauthorizedException(
+        'Invalid email or password.',
+      );
+    }
+
+    // ===================================================
+    // STEP 2: VERIFY PASSWORD USING BCRYPT
+    // ===================================================
+
+    // Compare the plaintext password supplied during login
+    // with the bcrypt hash stored in PostgreSQL.
+    const passwordMatches = await compare(
+      loginData.password,
+      user.passwordHash,
+    );
+
+    // Reject incorrect passwords.
+    if (!passwordMatches) {
+      throw new UnauthorizedException(
+        'Invalid email or password.',
+      );
+    }
+
+    // ===================================================
+    // STEP 3: GENERATE JWT ACCESS TOKEN
+    // ===================================================
+
+    // JWT payload contains the user's unique identifier.
+    // "sub" is the standard JWT subject claim.
+    //
+    // The JWT module configured in AuthModule controls:
+    // - Secret key
+    // - Signing algorithm (HS256)
+    // - Token expiration (15 minutes)
+    const accessToken = await this.jwtService.signAsync({
+      sub: user.id,
+    });
+
+    // ===================================================
+    // STEP 4: RETURN SAFE LOGIN RESPONSE
+    // ===================================================
+
+    // Return the token and public user information.
+    // Never return the stored password hash.
+    return {
+      accessToken,
+      tokenType: 'Bearer',
+
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+      },
+    };
   }
 }
