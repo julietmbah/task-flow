@@ -12,14 +12,21 @@ import { PrismaModule } from '../prisma/prisma.module.js';
 
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
-
-// Import our authentication guard.
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 
 // =====================================================
 // AUTHENTICATION MODULE
 // =====================================================
 
+/**
+ * AuthModule
+ *
+ * Responsible for:
+ * - Registering new users.
+ * - Authenticating existing users.
+ * - Creating and verifying JWT access tokens.
+ * - Protecting authenticated endpoints.
+ */
 @Module({
   imports: [
     // Provides PrismaService for database operations.
@@ -33,8 +40,8 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
       inject: [ConfigService],
 
       useFactory: (configService: ConfigService) => ({
-        // Decode our Base64 environment secret into
-        // its original 32 cryptographically random bytes.
+        // Decode the Base64 secret into its original
+        // 32 cryptographically random bytes.
         secret: Buffer.from(
           configService.getOrThrow<string>('JWT_SECRET'),
           'base64',
@@ -61,14 +68,19 @@ import { JwtAuthGuard } from './jwt-auth.guard.js';
     AuthController,
   ],
 
-  // Register authentication services.
+  // Register authentication services and guards.
   providers: [
     // Handles registration and login business logic.
     AuthService,
 
-    // Protects routes requiring valid access tokens.
-    // NestJS injects JwtService and PrismaService
-    // into this guard automatically.
+    // Verifies JWTs and authenticates users.
+    JwtAuthGuard,
+  ],
+
+  // Make JWT capabilities available to other modules
+  // that import AuthModule, including TasksModule.
+  exports: [
+    JwtModule,
     JwtAuthGuard,
   ],
 })
