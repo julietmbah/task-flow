@@ -8,9 +8,12 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseEnumPipe,
+  ParseIntPipe,
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UnauthorizedException,
   UseGuards,
@@ -28,6 +31,9 @@ import {
   TasksService,
   type CreateTaskInput,
   type UpdateTaskInput,
+  type TaskStatusFilter,
+  type TaskSortBy,
+  type TaskSortOrder,
 } from './tasks.service.js';
 
 /**
@@ -35,7 +41,7 @@ import {
  *
  * Base route: /tasks
  *
- * All task operations require a valid JWT.
+ * All endpoints require JWT authentication.
  */
 @Controller('tasks')
 @UseGuards(JwtAuthGuard)
@@ -45,7 +51,7 @@ export class TasksController {
   /**
    * POST /tasks
    *
-   * Create a new task for the authenticated user.
+   * Create a task for the authenticated user.
    */
   @Post()
   async createTask(
@@ -64,12 +70,12 @@ export class TasksController {
       title: dto.title,
     };
 
-    // Add optional description.
+    // Include optional description.
     if (dto.description !== undefined) {
       input.description = dto.description;
     }
 
-    // Convert ISO date text to a JavaScript Date.
+    // Convert an ISO date to a Date object.
     if (dto.dueDate !== undefined) {
       input.dueDate = new Date(dto.dueDate);
     }
@@ -80,12 +86,74 @@ export class TasksController {
   /**
    * GET /tasks
    *
-   * Retrieve all tasks belonging to the current user.
+   * Supports:
+   * - Status filtering.
+   * - Searching.
+   * - Sorting.
+   * - Pagination.
+   *
+   * Examples:
+   *
+   * GET /tasks
+   * GET /tasks?status=TODO
+   * GET /tasks?search=report
+   * GET /tasks?sortBy=dueDate&order=asc
+   * GET /tasks?page=1&limit=10
+   * GET /tasks?status=TODO&page=2&limit=5
    */
   @Get()
   async findAll(
     @Req() request: AuthenticatedRequest,
+
+    // Validate optional status.
+    @Query(
+      'status',
+      new ParseEnumPipe(
+        ['TODO', 'IN_PROGRESS', 'COMPLETED'],
+        { optional: true },
+      ),
+    )
+    status?: TaskStatusFilter,
+
+    // Search is validated manually below.
+    @Query('search')
+    search?: unknown,
+
+    // Validate optional sorting field.
+    @Query(
+      'sortBy',
+      new ParseEnumPipe(
+        ['createdAt', 'dueDate'],
+        { optional: true },
+      ),
+    )
+    sortBy?: TaskSortBy,
+
+    // Validate optional sorting direction.
+    @Query(
+      'order',
+      new ParseEnumPipe(
+        ['asc', 'desc'],
+        { optional: true },
+      ),
+    )
+    order?: TaskSortOrder,
+
+    // Parse the optional page number.
+    @Query(
+      'page',
+      new ParseIntPipe({ optional: true }),
+    )
+    page?: number,
+
+    // Parse the optional page size.
+    @Query(
+      'limit',
+      new ParseIntPipe({ optional: true }),
+    )
+    limit?: number,
   ) {
+    // Identify the authenticated user.
     const userId = request.user?.id;
 
     if (!userId) {
@@ -94,13 +162,147 @@ export class TasksController {
       );
     }
 
+    /**
+     * SEARCH VALIDATION
+     */
+    let cleanedSearch: string | undefined;
+
+    if (search !== undefined) {
+      // Reject arrays and other non-string inputs.
+      if (typeof search !== 'string') {
+        throw new BadRequestException(
+          'Search must be a string.',
+        );
+      }
+
+      // Remove surrounding whitespace.
+      cleanedSearch = search.trim();
+
+      // Allow search terms containing 1-100 characters.
+      if (
+        cleanedSearch.length === 0 ||
+        cleanedSearch.length > 100
+      ) {
+        throw new BadRequestException(
+          'Search must contain 1 to 100 characters.',
+        );
+      }
+    }
+
+    /**
+     * PAGINATION VALIDATION
+     *
+     * Page must be a positive integer.
+     */
+    if (
+      page !== undefined &&
+      (!Number.isSafeInteger(page) || page < 1)
+    ) {
+      throw new BadRequestException(
+        'Page must be a positive integer.',
+      );
+    }
+
+    /**
+     * Limit must be between 1 and 100.
+     */
+    if (
+      limit !== undefined &&
+      (
+        !Number.isSafeInteger(limit) ||
+        limit < 1 ||
+        limit > 100
+      )
+    ) {
+      throw new BadRequestException(
+        'Limit must be between 1 and 100.',
+      );
+    }
+
+    /**
+     * PAGINATED RESULTS
+     *
+     * Pagination is enabled when page or
+     * limit is explicitly provided.
+     */
+    if (page !== undefined || limit !== undefined) {
+      const currentPage = page ?? 1;
+      const pageSize = limit ?? 10;
+
+      // Prevent offsets exceeding Prisma's integer range.
+      const skip = (currentPage - 1) * pageSize;
+
+      if (
+        !Number.isSafeInteger(skip) ||
+        skip > 2147483647
+      ) {
+        throw new BadRequestException(
+          'Requested page is too large.',
+        );
+      }
+
+      return this.tasksService.findAll(
+        userId,
+        status,
+        cleanedSearch,
+        sortBy ?? 'createdAt',
+        order ?? 'desc',
+        currentPage,
+        pageSize,
+      );
+    }
+
+    /**
+     * SORTED RESULTS
+     *
+     * Preserve existing sorting behavior when
+     * pagination has not been requested.
+     */
+    if (
+      sortBy !== undefined ||
+      order !== undefined
+    ) {
+      return this.tasksService.findAll(
+        userId,
+        status,
+        cleanedSearch,
+        sortBy ?? 'createdAt',
+        order ?? 'desc',
+      );
+    }
+
+    /**
+     * SEARCH RESULTS
+     */
+    if (cleanedSearch !== undefined) {
+      return this.tasksService.findAll(
+        userId,
+        status,
+        cleanedSearch,
+      );
+    }
+
+    /**
+     * STATUS-FILTERED RESULTS
+     */
+    if (status !== undefined) {
+      return this.tasksService.findAll(
+        userId,
+        status,
+      );
+    }
+
+    /**
+     * ORIGINAL GET /tasks RESPONSE
+     *
+     * Without query parameters, return
+     * an ordinary array of owned tasks.
+     */
     return this.tasksService.findAll(userId);
   }
 
   /**
    * GET /tasks/:id
-   *
-   * Retrieve one task belonging to the current user.
    */
   @Get(':id')
   async findOne(
@@ -121,8 +323,6 @@ export class TasksController {
 
   /**
    * PATCH /tasks/:id
-   *
-   * Update selected fields of an owned task.
    */
   @Patch(':id')
   async updateTask(
@@ -139,25 +339,23 @@ export class TasksController {
       );
     }
 
-    // Prepare only the fields actually provided.
+    // Include only fields actually provided.
     const input: UpdateTaskInput = {};
 
-    // Update the title when provided.
     if (dto.title !== undefined) {
       input.title = dto.title;
     }
 
-    // Null clears the existing description.
+    // Null clears an existing description.
     if (dto.description !== undefined) {
       input.description = dto.description;
     }
 
-    // Update the task status when provided.
     if (dto.status !== undefined) {
       input.status = dto.status;
     }
 
-    // Convert deadline text or clear it with null.
+    // Convert an ISO date or clear it with null.
     if (dto.dueDate !== undefined) {
       input.dueDate =
         dto.dueDate === null
@@ -165,9 +363,7 @@ export class TasksController {
           : new Date(dto.dueDate);
     }
 
-    // Reject requests containing no update values.
-    // Check input instead of dto to avoid undefined
-    // class properties affecting empty-body validation.
+    // Reject empty updates.
     if (Object.keys(input).length === 0) {
       throw new BadRequestException(
         'Provide at least one task field to update.',
@@ -184,10 +380,7 @@ export class TasksController {
   /**
    * DELETE /tasks/:id
    *
-   * Permanently remove an owned task.
-   *
-   * Successful deletion returns HTTP 204
-   * without any JSON response body.
+   * Return HTTP 204 after successful deletion.
    */
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
@@ -196,19 +389,14 @@ export class TasksController {
     @Param('id', new ParseUUIDPipe({ version: '4' }))
     taskId: string,
   ) {
-    // Obtain the authenticated user's ID.
     const userId = request.user?.id;
 
-    // Reject requests without a verified user.
     if (!userId) {
       throw new UnauthorizedException(
         'Authenticated user not found.',
       );
     }
 
-    // Delete only if the task belongs to this user.
     await this.tasksService.deleteTask(userId, taskId);
-
-    // HTTP 204 No Content.
   }
 }
