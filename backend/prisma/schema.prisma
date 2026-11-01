@@ -1,26 +1,24 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
-
 generator client {
   // Generate Prisma Client as TypeScript code.
   provider = "prisma-client"
 
-  // Keep generated code inside our NestJS src folder.
+  // Store generated code inside our NestJS src folder.
   output = "../src/generated/prisma"
 
-  // Use ES Modules, matching our NestJS setup.
+  // Use ES Modules, matching our backend configuration.
   moduleFormat = "esm"
 }
 
-
 datasource db {
+  // TaskFlow uses PostgreSQL.
   provider = "postgresql"
 }
 
-/// Represents a registered user of TaskFlow.
+// =====================================================
+// USER MODEL
+// =====================================================
+
+/// Represents a registered TaskFlow user.
 model User {
   // Unique identifier for each user.
   id String @id @default(uuid())
@@ -28,15 +26,73 @@ model User {
   // User's full name.
   name String
 
-  // Email addresses must be unique.
+  // Every email address must be unique.
   email String @unique
 
-  // Store a secure password hash, never plaintext.
+  // Store a bcrypt password hash, never plaintext.
   passwordHash String
+
+  // One user can own multiple tasks.
+  // This defines our one-to-many relationship.
+  tasks Task[]
 
   // Automatically record when the user was created.
   createdAt DateTime @default(now())
 
   // Automatically update when the user changes.
   updatedAt DateTime @updatedAt
+}
+
+// =====================================================
+// TASK STATUS ENUM
+// =====================================================
+
+// Restrict tasks to three supported status values.
+enum TaskStatus {
+  // The task has not been started.
+  TODO
+
+  // The user is currently working on the task.
+  IN_PROGRESS
+
+  // The task has been completed.
+  COMPLETED
+}
+
+// =====================================================
+// TASK MODEL
+// =====================================================
+
+/// Represents a task belonging to a registered user.
+model Task {
+  // Unique identifier for each task.
+  id String @id @default(uuid())
+
+  // Every task must have a title.
+  title String
+
+  // Optional additional task information.
+  description String?
+
+  // New tasks start with TODO status by default.
+  status TaskStatus @default(TODO)
+
+  // Optional deadline for completing the task.
+  dueDate DateTime?
+
+  // Required ID of the user who owns the task.
+  userId String
+
+  // Connect the task to its registered owner.
+  // Restrict prevents deleting users who still own tasks.
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // Automatically record when the task was created.
+  createdAt DateTime @default(now())
+
+  // Automatically update when the task changes.
+  updatedAt DateTime @updatedAt
+
+  // Improve performance when retrieving a user's tasks.
+  @@index([userId])
 }
