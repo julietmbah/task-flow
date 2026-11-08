@@ -26,9 +26,9 @@ async function bootstrap() {
     }),
   );
 
-  // Start the application using the configured port.
-  // Default to port 3000 when PORT is not provided.
-  await app.listen(process.env.PORT ?? 3000);
+    // Start the NestJS backend on port 8080 by default.
+  // A configured PORT environment variable takes priority.
+  await app.listen(process.env.PORT ?? 8080);
 }
 
 // Start the TaskFlow application.

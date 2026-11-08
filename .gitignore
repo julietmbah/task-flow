@@ -15,3 +15,9 @@ coverage/
 
 # Application log files
 *.log
+
+# Ignore uploaded profile photos
+/backend/uploads/
+
+# Ignore TypeScript build cache
+*.tsbuildinfo
