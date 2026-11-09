@@ -1,4 +1,3 @@
-
 import {
   BadRequestException,
   ConflictException,
@@ -202,4 +201,75 @@ export class AuthService {
       },
     };
   }
+
+  // =====================================================
+  // CHANGE PASSWORD (SIGNED-IN USERS)
+  // =====================================================
+
+  /**
+   * Verify the current password and replace it with a bcrypt hash.
+   *
+   * We never return the password or its hash to the frontend.
+   * A conditional update prevents an older request overwriting
+   * a newer password if two requests happen at once.
+   */
+  async changePassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ message: string }> {
+    // bcrypt only considers the first 72 UTF-8 bytes.
+    // Reject longer values instead of silently truncating them.
+    if (Buffer.byteLength(currentPassword, 'utf8') > 72) {
+      throw new BadRequestException('Your current password is incorrect.');
+    }
+
+    if (Buffer.byteLength(newPassword, 'utf8') > 72) {
+      throw new BadRequestException(
+        'Your new password is too long. Please choose a shorter one.',
+      );
+    }
+
+    const account = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { passwordHash: true },
+    });
+
+    if (!account) {
+      throw new UnauthorizedException('Please sign in again.');
+    }
+
+    const isCurrentPasswordCorrect = await compare(
+      currentPassword,
+      account.passwordHash,
+    );
+
+    if (!isCurrentPasswordCorrect) {
+      throw new BadRequestException('Your current password is incorrect.');
+    }
+
+    // Comparing against the hash also handles the case where a
+    // different-looking input has the same underlying password.
+    const isReusingPassword = await compare(newPassword, account.passwordHash);
+    if (isReusingPassword) {
+      throw new BadRequestException(
+        'Choose a new password that is different from your current one.',
+      );
+    }
+
+    const passwordHash = await hash(newPassword, 12);
+    const result = await this.prisma.user.updateMany({
+      where: { id: userId, passwordHash: account.passwordHash },
+      data: { passwordHash },
+    });
+
+    if (result.count !== 1) {
+      throw new ConflictException(
+        'Your password was changed elsewhere. Please sign in and try again.',
+      );
+    }
+
+    return { message: 'Your password has been changed successfully.' };
+  }
+
 }

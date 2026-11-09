@@ -79,3 +79,57 @@ export async function deleteProfilePhoto(accessToken: string): Promise<void> {
   const response = await request(accessToken, '/photo', { method: 'DELETE' })
   if (!response.ok) throw new Error(await messageFor(response))
 }
+
+/** The fields accepted by PATCH /auth/me/password. */
+export interface ChangePasswordRequest {
+  currentPassword: string
+  newPassword: string
+}
+
+/**
+ * Change the current user's password.
+ * Only helpful messages are shown; no account secrets are logged or stored.
+ */
+export async function changeProfilePassword(
+  accessToken: string,
+  passwords: ChangePasswordRequest,
+): Promise<void> {
+  const response = await request(accessToken, '/password', {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(passwords),
+  })
+
+  if (response.ok) return
+
+  if (response.status === 400 || response.status === 422) {
+    const body: unknown = await response.json().catch(() => null)
+    const rawMessage = (
+      body !== null && typeof body === 'object' && 'message' in body
+        ? body.message
+        : null
+    )
+    const messages = typeof rawMessage === 'string'
+      ? [rawMessage]
+      : Array.isArray(rawMessage)
+        ? rawMessage.filter((item): item is string => typeof item === 'string')
+        : []
+
+    // Allow only known safe validation messages through to the interface.
+    const message = messages.find((text) => [
+      'Your current password is incorrect.',
+      'Your new password is too long. Please choose a shorter one.',
+      'Choose a new password that is different from your current one.',
+      'Your new password must be at least 8 characters long.',
+      'Please enter your current password.',
+      'Please enter a new password.',
+    ].includes(text))
+    throw new Error(message ?? 'Please check your passwords and try again.')
+  }
+
+  if (response.status === 409) {
+    throw new Error('Your password was recently changed. Please sign in again and try again.')
+  }
+
+  throw new Error(await messageFor(response))
+}

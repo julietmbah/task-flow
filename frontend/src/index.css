@@ -3138,3 +3138,118 @@ html[data-theme='dark'] .tf-profile-message--error { background: #46242b; border
     font-size: 17px;
   }
 }
+
+
+/* ============================================================
+   DAY 13: CHANGE PASSWORD — My Profile account security
+   - Scoped styles; existing dashboard and tasks remain unchanged
+   - Small screens stack the controls without horizontal scrolling
+   ============================================================ */
+.tf-password-section {
+  margin-top: 20px;
+  padding: clamp(21px, 2.5vw, 30px);
+}
+.tf-password-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 15px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--tf-divider);
+}
+.tf-password-header-icon {
+  display: flex;
+  flex: 0 0 46px;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  color: var(--tf-primary);
+  background: var(--tf-accent-surface);
+}
+.tf-password-header h2 {
+  margin: 0;
+  color: var(--tf-heading);
+  font-size: clamp(18px, 2vw, 21px);
+  font-weight: 800;
+  letter-spacing: -.4px;
+}
+.tf-password-header p:last-child {
+  margin: 8px 0 0;
+  color: var(--tf-muted);
+  line-height: 1.65;
+  font-size: 13px;
+}
+.tf-password-section > .tf-profile-message { margin-top: 20px; margin-bottom: 0; }
+.tf-password-form { margin-top: 24px; }
+.tf-password-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+  gap: 18px;
+}
+.tf-password-field { display: flex; flex-direction: column; min-width: 0; gap: 9px; }
+.tf-password-field label { font-size: 13px; color: var(--tf-heading); font-weight: 750; }
+.tf-password-input-wrap { display: flex; align-items: center; min-width: 0; position: relative; }
+.tf-password-input-wrap input {
+  width: 100%; min-width: 0; height: 46px;
+  padding: 10px 46px 10px 13px;
+  border: 1px solid var(--tf-border);
+  border-radius: 10px;
+  outline: none;
+  background: var(--tf-canvas);
+  color: var(--tf-heading);
+  font-size: 13px;
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+.tf-password-input-wrap input:focus-visible {
+  border-color: var(--tf-primary);
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, .12);
+}
+.tf-password-input-wrap input::placeholder { color: var(--tf-soft); }
+.tf-password-input-wrap > button {
+  display: flex;
+  position: absolute;
+  right: 5px;
+  top: 4px;
+  width: 37px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--tf-muted);
+}
+.tf-password-input-wrap > button:hover:not(:disabled) {
+  color: var(--tf-primary);
+  background: var(--tf-hover);
+}
+.tf-password-help { margin: 0; color: var(--tf-muted); font-size: 11px; line-height: 1.6; }
+.tf-password-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+  margin-top: 26px;
+  padding-top: 19px;
+  border-top: 1px solid var(--tf-divider);
+}
+.tf-password-actions p { margin: 0; color: var(--tf-muted); font-size: 12px; }
+.tf-password-actions .tf-password-submit { margin: 0; min-height: 44px; font-size: 13px; }
+.tf-password-section button:disabled { cursor: not-allowed; opacity: .65; }
+@media (max-width: 1150px) {
+  .tf-password-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .tf-password-fields { grid-template-columns: minmax(0, 1fr); gap: 19px; }
+  .tf-password-header { gap: 12px; }
+  .tf-password-section { margin-top: 16px; }
+}
+@media (max-width: 480px) {
+  .tf-password-header-icon { width: 40px; height: 40px; flex-basis: 40px; }
+  .tf-password-actions { align-items: stretch; flex-direction: column; }
+  .tf-password-actions .tf-password-submit { width: 100%; justify-content: center; }
+}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
+import ChangePasswordSection from './ChangePasswordSection'
 
 import { useAuth } from '../hooks/useAuth'
 import { getCurrentUser } from '../services/authApi'
@@ -404,6 +405,9 @@ export default function ProfilePage() {
               </section>
             </div>
           </div>
+
+          {/* Account security stays on the Profile page. No changes to the dashboard shell. */}
+          <ChangePasswordSection accessToken={accessToken} />
         </>
       )}
     </div>

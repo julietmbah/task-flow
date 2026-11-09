@@ -24,6 +24,8 @@ import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { PrismaService } from '../prisma/prisma.service.js';
+import { AuthService } from './auth.service.js';
+import { ChangePasswordDto } from './dto/change-password.dto.js';
 import {
   JwtAuthGuard,
   type AuthenticatedRequest,
@@ -99,9 +101,31 @@ function authenticatedUserId(request: AuthenticatedRequest): string {
 @Controller('auth')
 @UseGuards(JwtAuthGuard)
 export class ProfileController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly authService: AuthService,
+  ) {}
 
-  /** PATCH /auth/me — name only. Email changes require verification. */
+  /**
+   * PATCH /auth/me/password
+   *
+   * Requires an active session AND the correct current password.
+   * Only a short success message is returned.
+   */
+  @Patch('me/password')
+  @Header('Cache-Control', 'no-store')
+  async changeMyPassword(
+    @Req() request: AuthenticatedRequest,
+    @Body() dto: ChangePasswordDto,
+  ): Promise<{ message: string }> {
+    return this.authService.changePassword(
+      authenticatedUserId(request),
+      dto.currentPassword,
+      dto.newPassword,
+    );
+  }
+
+  /** PATCH /auth/me â€” name only. Email changes require verification. */
   @Patch('me')
   @Header('Cache-Control', 'no-store')
   async updateMe(
@@ -119,7 +143,7 @@ export class ProfileController {
     });
   }
 
-  /** GET /auth/me/photo — private image, not a public static URL. */
+  /** GET /auth/me/photo â€” private image, not a public static URL. */
   @Get('me/photo')
   @Header('Cache-Control', 'private, no-store')
   async getMyPhoto(@Req() request: AuthenticatedRequest): Promise<StreamableFile> {
@@ -136,7 +160,7 @@ export class ProfileController {
     throw new NotFoundException('You have not added a profile photo yet.');
   }
 
-  /** POST /auth/me/photo — upload a JPG, PNG, or WebP up to 2 MB. */
+  /** POST /auth/me/photo â€” upload a JPG, PNG, or WebP up to 2 MB. */
   @Post('me/photo')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(FileInterceptor('photo', { limits: { fileSize: MAX_PHOTO_BYTES } }))
@@ -176,7 +200,7 @@ export class ProfileController {
     return { message: 'Your profile photo has been updated.' };
   }
 
-  /** DELETE /auth/me/photo — only the signed-in user's photo. */
+  /** DELETE /auth/me/photo â€” only the signed-in user's photo. */
   @Delete('me/photo')
   @HttpCode(HttpStatus.NO_CONTENT)
   async removeMyPhoto(@Req() request: AuthenticatedRequest): Promise<void> {
