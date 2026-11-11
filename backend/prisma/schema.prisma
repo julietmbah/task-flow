@@ -36,6 +36,9 @@ model User {
   // This defines our one-to-many relationship.
   tasks Task[]
 
+  // A user may request password reset links.
+  passwordResetTokens PasswordResetToken[]
+
   // Automatically record when the user was created.
   createdAt DateTime @default(now())
 
@@ -95,4 +98,34 @@ model Task {
 
   // Improve performance when retrieving a user's tasks.
   @@index([userId])
+}
+
+// =====================================================
+// PASSWORD RESET TOKEN MODEL
+// =====================================================
+
+// Stores password recovery requests. Only a SHA-256 hash of the
+// secret reset token is stored, never the reset token itself.
+model PasswordResetToken {
+  id String @id @default(uuid())
+
+  // The user who requested password recovery.
+  userId String
+
+  // SHA-256 hash of a cryptographically random reset token.
+  tokenHash String @unique
+
+  // The application will set this to 15 minutes after creation.
+  expiresAt DateTime
+
+  // Set when a token is redeemed so it cannot be used again.
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  // Prisma requires the relation attribute to stay on one line.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }

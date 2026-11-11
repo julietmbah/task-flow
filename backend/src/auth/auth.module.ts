@@ -1,89 +1,48 @@
-
 import { Module } from '@nestjs/common';
-
-import {
-  ConfigModule,
-  ConfigService,
-} from '@nestjs/config';
-
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 
 import { PrismaModule } from '../prisma/prisma.module.js';
-
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
 import { JwtAuthGuard } from './jwt-auth.guard.js';
 import { ProfileController } from './profile.controller.js';
-
-// =====================================================
-// AUTHENTICATION MODULE
-// =====================================================
+import { PasswordResetController } from './password-reset.controller.js';
+import { PasswordResetMailService } from './password-reset-mail.service.js';
+import { PasswordResetService } from './password-reset.service.js';
 
 /**
- * AuthModule
- *
- * Responsible for:
- * - Registering new users.
- * - Authenticating existing users.
- * - Creating and verifying JWT access tokens.
- * - Protecting authenticated endpoints.
+ * Existing login, registration, and profile providers are unchanged.
+ * Only the public password-recovery controller and its services are added.
  */
 @Module({
   imports: [
-    // Provides PrismaService for database operations.
     PrismaModule,
-
-    // Configure JWT using environment variables.
+    ConfigModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
-
-      // Inject ConfigService to read JWT_SECRET.
       inject: [ConfigService],
-
       useFactory: (configService: ConfigService) => ({
-        // Decode the Base64 secret into its original
-        // 32 cryptographically random bytes.
         secret: Buffer.from(
           configService.getOrThrow<string>('JWT_SECRET'),
           'base64',
         ),
-
-        // Configure access token signing.
-        signOptions: {
-          algorithm: 'HS256',
-
-          // Access tokens expire after 15 minutes.
-          expiresIn: '15m',
-        },
-
-        // Only permit our chosen JWT algorithm.
-        verifyOptions: {
-          algorithms: ['HS256'],
-        },
+        signOptions: { algorithm: 'HS256', expiresIn: '15m' },
+        verifyOptions: { algorithms: ['HS256'] },
       }),
     }),
   ],
-
-  // Handles registration, login, and user profile.
   controllers: [
     AuthController,
-    ProfileController
+    ProfileController,
+    PasswordResetController,
   ],
-
-  // Register authentication services and guards.
   providers: [
-    // Handles registration and login business logic.
     AuthService,
-
-    // Verifies JWTs and authenticates users.
     JwtAuthGuard,
+    PasswordResetMailService,
+    PasswordResetService,
   ],
-
-  // Make JWT capabilities available to other modules
-  // that import AuthModule, including TasksModule.
-  exports: [
-    JwtModule,
-    JwtAuthGuard,
-  ],
+  exports: [JwtModule, JwtAuthGuard],
 })
 export class AuthModule {}
