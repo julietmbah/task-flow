@@ -1,10 +1,9 @@
-
 import {
   useState,
   type FormEvent,
 } from 'react'
 
-import { useNavigate } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 import { useAuth } from '../hooks/useAuth'
 
@@ -231,6 +230,13 @@ export default function LoginPage() {
                   {showPassword ? 'Hide' : 'Show'}
                 </button>
               </div>
+            </div>
+
+            {/* Password recovery is available without signing in. */}
+            <div className="auth-forgot-row">
+              <Link to="/forgot-password" className="auth-text-link">
+                Forgot password?
+              </Link>
             </div>
 
             {/* Real login submission button. */}

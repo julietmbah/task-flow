@@ -6,6 +6,8 @@ import {
 } from 'react-router'
 
 import LoginPage from './pages/LoginPage'
+import ForgotPasswordPage from './pages/ForgotPasswordPage'
+import ResetPasswordPage from './pages/ResetPasswordPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import ProtectedRoute from './routes/ProtectedRoute'
@@ -57,6 +59,8 @@ export default function App() {
       {/* Public authentication pages. */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
 
       {/* Both existing workspace routes remain JWT protected. */}
       <Route element={<ProtectedRoute />}>

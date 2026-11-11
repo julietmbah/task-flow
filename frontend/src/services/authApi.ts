@@ -1,4 +1,3 @@
-
 import type {
   AuthUser,
   LoginRequest,
@@ -182,4 +181,23 @@ export async function getCurrentUser(
       },
     },
   )
+}
+
+/** Request a recovery email without revealing whether an account exists. */
+export async function requestPasswordReset(email: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  })
+}
+
+/** Redeem a one-time password reset link. */
+export async function resetPasswordWithToken(
+  token: string,
+  newPassword: string,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, newPassword }),
+  })
 }
