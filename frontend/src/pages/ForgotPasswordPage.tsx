@@ -1,35 +1,34 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 import { requestPasswordReset } from '../services/authApi'
 import RecoveryAuthLayout from './RecoveryAuthLayout'
 
-const GENERIC_CONFIRMATION =
-  'If an account exists for that email, a password reset link will be sent.'
-
-/** Public recovery page; never reveals which email addresses have accounts. */
+/** Start the recovery flow without disclosing whether an account exists. */
 export default function ForgotPasswordPage() {
+  const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const [message, setMessage] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (isSending) return
 
-    setMessage('')
     setErrorMessage('')
     setIsSending(true)
 
     try {
-      await requestPasswordReset(email)
-      setMessage(GENERIC_CONFIRMATION)
+      const address = email.trim().toLowerCase()
+      await requestPasswordReset(address)
+      navigate('/verify-password-otp', {
+        state: { email: address, requestedAt: Date.now() },
+      })
     } catch (error: unknown) {
       setErrorMessage(
         error instanceof Error
           ? error.message
-          : 'We couldn’t send the request right now. Please try again.',
+          : 'We couldn’t send your code right now. Please try again.',
       )
     } finally {
       setIsSending(false)
@@ -38,9 +37,9 @@ export default function ForgotPasswordPage() {
 
   return (
     <RecoveryAuthLayout
-      kicker="ACCOUNT RECOVERY"
+      kicker="ACCOUNT RECOVERY · STEP 1 OF 3"
       title="Forgot your password?"
-      description="Enter the email address linked to your TaskFlow account. We'll send you a secure link to choose a new password."
+      description="Enter the email address linked to your TaskFlow account. We'll send a six-digit verification code to your inbox."
       titleId="forgot-password-title"
     >
       <form className="login-form recovery-form" onSubmit={handleSubmit} aria-busy={isSending}>
@@ -57,7 +56,6 @@ export default function ForgotPasswordPage() {
             value={email}
             onChange={(event) => {
               setEmail(event.target.value)
-              setMessage('')
               setErrorMessage('')
             }}
             required
@@ -66,18 +64,17 @@ export default function ForgotPasswordPage() {
           />
         </div>
 
-        <button className="login-button" type="submit" disabled={isSending}>
-          {isSending ? 'Sending link…' : 'Send reset link'}
-        </button>
-
-        {message && (
-          <div className="form-feedback recovery-success" role="status" aria-live="polite">
-            <strong>Check your inbox</strong>
-            <p>{message}</p>
-            <p>Also check your Spam or Junk folder. The link expires after 15 minutes.</p>
-          </div>
+        {errorMessage && (
+          <p className="form-feedback form-error" role="alert">{errorMessage}</p>
         )}
-        {errorMessage && <p className="form-feedback form-error" role="alert">{errorMessage}</p>}
+
+        <button className="login-button" type="submit" disabled={isSending}>
+          {isSending ? 'Sending code…' : 'Send verification code'}
+          {!isSending && <span aria-hidden="true">→</span>}
+        </button>
+        <p className="recovery-password-hint">
+          For your security, verification codes expire after 10 minutes.
+        </p>
       </form>
 
       <p className="registration-note recovery-back-row">
