@@ -1,0 +1,32 @@
+
+services:
+  db:
+    # PostgreSQL 17 running in a lightweight container
+    image: postgres:17-alpine
+
+    # Automatically restart the database unless stopped
+    restart: unless-stopped
+
+    # Database configuration loaded from .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+
+    # Expose PostgreSQL only on our computer
+    ports:
+      - "127.0.0.1:5434:5432"
+
+    # Preserve database data when the container stops
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+    # Check whether PostgreSQL is accepting connections
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

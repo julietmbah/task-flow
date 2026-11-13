@@ -1,0 +1,168 @@
+generator client {
+  // Generate Prisma Client as TypeScript code.
+  provider = "prisma-client"
+
+  // Store generated code inside our NestJS src folder.
+  output = "../src/generated/prisma"
+
+  // Use ES Modules, matching our backend configuration.
+  moduleFormat = "esm"
+}
+
+datasource db {
+  // TaskFlow uses PostgreSQL.
+  provider = "postgresql"
+}
+
+// =====================================================
+// USER MODEL
+// =====================================================
+
+/// Represents a registered TaskFlow user.
+model User {
+  // Unique identifier for each user.
+  id String @id @default(uuid())
+
+  // User's full name.
+  name String
+
+  // Every email address must be unique.
+  email String @unique
+
+  // Store a bcrypt password hash, never plaintext.
+  passwordHash String
+
+  // One user can own multiple tasks.
+  // This defines our one-to-many relationship.
+  tasks Task[]
+
+  // A user may request password reset links.
+  passwordResetTokens PasswordResetToken[]
+
+  // At most one pending email verification code for password recovery.
+  passwordResetOtp PasswordResetOtp?
+
+  // Automatically record when the user was created.
+  createdAt DateTime @default(now())
+
+  // Automatically update when the user changes.
+  updatedAt DateTime @updatedAt
+}
+
+// =====================================================
+// TASK STATUS ENUM
+// =====================================================
+
+// Restrict tasks to three supported status values.
+enum TaskStatus {
+  // The task has not been started.
+  TODO
+
+  // The user is currently working on the task.
+  IN_PROGRESS
+
+  // The task has been completed.
+  COMPLETED
+}
+
+// =====================================================
+// TASK MODEL
+// =====================================================
+
+/// Represents a task belonging to a registered user.
+model Task {
+  // Unique identifier for each task.
+  id String @id @default(uuid())
+
+  // Every task must have a title.
+  title String
+
+  // Optional additional task information.
+  description String?
+
+  // New tasks start with TODO status by default.
+  status TaskStatus @default(TODO)
+
+  // Optional deadline for completing the task.
+  dueDate DateTime?
+
+  // Required ID of the user who owns the task.
+  userId String
+
+  // Connect the task to its registered owner.
+  // Restrict prevents deleting users who still own tasks.
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  // Automatically record when the task was created.
+  createdAt DateTime @default(now())
+
+  // Automatically update when the task changes.
+  updatedAt DateTime @updatedAt
+
+  // Improve performance when retrieving a user's tasks.
+  @@index([userId])
+}
+
+// =====================================================
+// PASSWORD RESET TOKEN MODEL
+// =====================================================
+
+// Stores password recovery requests. Only a SHA-256 hash of the
+// secret reset token is stored, never the reset token itself.
+model PasswordResetToken {
+  id String @id @default(uuid())
+
+  // The user who requested password recovery.
+  userId String
+
+  // SHA-256 hash of a cryptographically random reset token.
+  tokenHash String @unique
+
+  // The application will set this to 15 minutes after creation.
+  expiresAt DateTime
+
+  // Set when a token is redeemed so it cannot be used again.
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  // Prisma requires the relation attribute to stay on one line.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// =====================================================
+// PASSWORD RESET OTP MODEL (DAY 15)
+// =====================================================
+
+// A user can have one active OTP challenge at a time.
+// Store a keyed hash of the six-digit code, never the code itself.
+// The service will enforce a short expiry, a resend cooldown, and
+// a maximum number of incorrect attempts before invalidating it.
+model PasswordResetOtp {
+  id String @id @default(uuid())
+
+  // One active challenge per account; issuing a new one replaces the old.
+  userId String @unique
+
+  // HMAC-SHA256 of the 6-digit code, using a server-side secret.
+  otpHash String
+
+  // The application sets this to 10 minutes after issuing the code.
+  expiresAt DateTime
+
+  // Failed verification attempts, capped by the service.
+  attempts Int @default(0)
+
+  // Set after verification to prevent another successful use.
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
