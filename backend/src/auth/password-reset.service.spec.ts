@@ -1,4 +1,5 @@
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
+import { ConfigService } from '@nestjs/config';
 import { hash, compare } from 'bcryptjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,12 +10,25 @@ import { PasswordResetService } from './password-reset.service.js';
 const VALID_TOKEN = 'ab'.repeat(32);
 const TOKEN_HASH = createHash('sha256').update(VALID_TOKEN).digest('hex');
 const INVALID_LINK = /invalid or has expired/i;
+const OTP_SECRET = Buffer.alloc(32, 7).toString('base64');
+
+function otpHash(userId: string, code: string): string {
+  return createHmac('sha256', Buffer.from(OTP_SECRET, 'base64'))
+    .update(`taskflow:password-reset-otp:v1\0${userId}\0${code}`, 'utf8')
+    .digest('hex');
+}
 
 function createTestSetup() {
   const db = {
     user: {
       findUnique: vi.fn(),
       updateMany: vi.fn(),
+    },
+    passwordResetOtp: {
+      findUnique: vi.fn(),
+      create: vi.fn(),
+      updateMany: vi.fn(),
+      deleteMany: vi.fn(),
     },
     passwordResetToken: {
       findFirst: vi.fn(),
@@ -33,12 +47,15 @@ function createTestSetup() {
   const mail = {
     isConfigured: vi.fn(() => true),
     sendResetLink: vi.fn().mockResolvedValue(undefined),
+    sendVerificationCode: vi.fn().mockResolvedValue(undefined),
   };
+  const config = { getOrThrow: vi.fn(() => OTP_SECRET) };
   const service = new PasswordResetService(
     prisma as unknown as PrismaService,
     mail as unknown as PasswordResetMailService,
+    config as unknown as ConfigService,
   );
-  return { service, db, prisma, mail };
+  return { service, db, prisma, mail, config };
 }
 
 describe('PasswordResetService', () => {
@@ -46,6 +63,10 @@ describe('PasswordResetService', () => {
 
   beforeEach(() => {
     setup = createTestSetup();
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue(null);
+    setup.db.passwordResetOtp.create.mockResolvedValue({ id: 'otp-1' });
+    setup.db.passwordResetOtp.updateMany.mockResolvedValue({ count: 1 });
+    setup.db.passwordResetOtp.deleteMany.mockResolvedValue({ count: 1 });
     setup.db.passwordResetToken.findFirst.mockResolvedValue(null);
     setup.db.passwordResetToken.create.mockResolvedValue({ id: 'token-1' });
     setup.db.passwordResetToken.deleteMany.mockResolvedValue({ count: 0 });
@@ -54,54 +75,167 @@ describe('PasswordResetService', () => {
     setup.db.user.updateMany.mockResolvedValue({ count: 1 });
   });
 
-  it('returns the same generic message for unregistered emails', async () => {
+  it('does not disclose whether an email address is registered', async () => {
     setup.db.user.findUnique.mockResolvedValue(null);
     const result = await setup.service.requestReset('Missing@Example.com');
     expect(result.message).toMatch(/if an account exists/i);
-    expect(setup.mail.sendResetLink).not.toHaveBeenCalled();
-    expect(setup.db.passwordResetToken.create).not.toHaveBeenCalled();
+    expect(result.message).toMatch(/verification code/i);
+    expect(setup.mail.sendVerificationCode).not.toHaveBeenCalled();
+    expect(setup.db.passwordResetOtp.create).not.toHaveBeenCalled();
   });
 
-  it('rejects every address consistently when email is not configured', async () => {
+  it('handles missing SMTP configuration without looking up the account', async () => {
     setup.mail.isConfigured.mockReturnValue(false);
     await expect(setup.service.requestReset('any@example.com'))
       .rejects.toThrow(/temporarily unavailable/i);
     expect(setup.db.user.findUnique).not.toHaveBeenCalled();
   });
 
-  it('stores a SHA-256 token hash, not the emailed token', async () => {
+  it('emails a six-digit code, storing only its keyed hash', async () => {
     setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
     const result = await setup.service.requestReset(' PERSON@Example.com ');
     expect(result.message).toMatch(/if an account exists/i);
     expect(setup.db.user.findUnique).toHaveBeenCalledWith({
       where: { email: 'person@example.com' }, select: { id: true, email: true },
     });
-    const sentToken = setup.mail.sendResetLink.mock.calls[0]?.[1] as string;
-    expect(sentToken).toMatch(/^[a-f0-9]{64}$/);
-    const created = setup.db.passwordResetToken.create.mock.calls[0]?.[0] as {
-      data: { tokenHash: string; expiresAt: Date };
+    const sentCode = setup.mail.sendVerificationCode.mock.calls[0]?.[1] as string;
+    expect(sentCode).toMatch(/^\d{6}$/);
+    expect(setup.mail.sendResetLink).not.toHaveBeenCalled();
+    const created = setup.db.passwordResetOtp.create.mock.calls[0]?.[0] as {
+      data: { userId: string; otpHash: string; expiresAt: Date; attempts: number },
     };
-    expect(created.data.tokenHash).toBe(
-      createHash('sha256').update(sentToken).digest('hex'),
-    );
-    expect(created.data.tokenHash).not.toBe(sentToken);
+    expect(created.data.userId).toBe('user-1');
+    expect(created.data.otpHash).toBe(otpHash('user-1', sentCode));
+    expect(created.data.otpHash).not.toBe(sentCode);
     expect(created.data.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(created.data.attempts).toBe(0);
   });
 
-  it('does not send another email within the cooldown', async () => {
+  it('blocks resend attempts during the sixty-second cooldown', async () => {
     setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
-    setup.db.passwordResetToken.findFirst.mockResolvedValue({ id: 'recent' });
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue({ createdAt: new Date() });
+    const result = await setup.service.requestReset('person@example.com');
+    expect(result.message).toMatch(/if an account exists/i);
+    expect(setup.mail.sendVerificationCode).not.toHaveBeenCalled();
+  });
+
+  it('reissues after cooldown, resetting expiry, attempts and single-use status', async () => {
+    setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue({
+      createdAt: new Date(Date.now() - 70_000),
+    });
     await setup.service.requestReset('person@example.com');
+    const args = setup.db.passwordResetOtp.updateMany.mock.calls[0]?.[0] as {
+      data: { attempts: number; usedAt: Date | null; expiresAt: Date },
+    };
+    expect(args.data.attempts).toBe(0);
+    expect(args.data.usedAt).toBeNull();
+    expect(args.data.expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(setup.mail.sendVerificationCode).toHaveBeenCalledOnce();
+  });
+
+  it('does not retain the OTP if its email cannot be sent', async () => {
+    setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
+    setup.mail.sendVerificationCode.mockRejectedValue(new Error('SMTP failed'));
+    const result = await setup.service.requestReset('person@example.com');
+    expect(result.message).toMatch(/if an account exists/i);
+    expect(setup.db.passwordResetOtp.deleteMany).toHaveBeenCalledOnce();
+    expect(setup.db.passwordResetToken.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an unknown email with the same invalid-code message', async () => {
+    setup.db.user.findUnique.mockResolvedValue(null);
+    await expect(setup.service.verifyOtp('missing@example.com', '123456'))
+      .rejects.toThrow(/incorrect or has expired/i);
+  });
+
+  it('counts incorrect OTP attempts without sending a link', async () => {
+    setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue({
+      otpHash: otpHash('user-1', '123456'),
+      expiresAt: new Date(Date.now() + 60_000), attempts: 0, usedAt: null,
+    });
+    await expect(setup.service.verifyOtp('person@example.com', '999999'))
+      .rejects.toThrow(/incorrect or has expired/i);
+    expect(setup.db.passwordResetOtp.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { attempts: { increment: 1 } } }),
+    );
     expect(setup.mail.sendResetLink).not.toHaveBeenCalled();
   });
 
-  it('keeps the generic response when SMTP fails and deletes the unusable token', async () => {
+  it('blocks codes once the attempt limit is reached', async () => {
     setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
-    setup.mail.sendResetLink.mockRejectedValue(new Error('SMTP error'));
-    const result = await setup.service.requestReset('person@example.com');
-    expect(result.message).toMatch(/if an account exists/i);
-    expect(setup.db.passwordResetToken.delete).toHaveBeenCalledWith({
-      where: { id: 'token-1' },
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue({
+      otpHash: otpHash('user-1', '123456'),
+      expiresAt: new Date(Date.now() + 60_000), attempts: 5, usedAt: null,
+    });
+    await expect(setup.service.verifyOtp('person@example.com', '123456'))
+      .rejects.toThrow(/incorrect or has expired/i);
+    expect(setup.prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects expired or already-consumed OTPs', async () => {
+    setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
+    for (const challenge of [
+      { otpHash: otpHash('user-1', '123456'), expiresAt: new Date(Date.now() - 1000), attempts: 0, usedAt: null },
+      { otpHash: otpHash('user-1', '123456'), expiresAt: new Date(Date.now() + 60_000), attempts: 0, usedAt: new Date() },
+    ]) {
+      setup.db.passwordResetOtp.findUnique.mockResolvedValue(challenge);
+      await expect(setup.service.verifyOtp('person@example.com', '123456'))
+        .rejects.toThrow(/incorrect or has expired/i);
+    }
+    expect(setup.mail.sendResetLink).not.toHaveBeenCalled();
+  });
+
+  it('consumes a correct OTP and emails only a hashed, one-use reset link', async () => {
+    setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue({
+      otpHash: otpHash('user-1', '123456'),
+      expiresAt: new Date(Date.now() + 60_000), attempts: 0, usedAt: null,
+    });
+    const result = await setup.service.verifyOtp(' PERSON@Example.com ', '123456');
+    expect(result.message).toMatch(/check your email/i);
+    expect(setup.prisma.$transaction).toHaveBeenCalledOnce();
+    const consumed = setup.db.passwordResetOtp.updateMany.mock.calls[0]?.[0] as {
+      where: { otpHash: string }, data: { usedAt: Date },
+    };
+    expect(consumed.where.otpHash).toBe(otpHash('user-1', '123456'));
+    expect(consumed.data.usedAt).toBeInstanceOf(Date);
+    const rawToken = setup.mail.sendResetLink.mock.calls[0]?.[1] as string;
+    expect(rawToken).toMatch(/^[a-f0-9]{64}$/);
+    const created = setup.db.passwordResetToken.create.mock.calls[0]?.[0] as {
+      data: { tokenHash: string; expiresAt: Date },
+    };
+    expect(created.data.tokenHash).toBe(createHash('sha256').update(rawToken).digest('hex'));
+    expect(created.data.expiresAt.getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('rejects concurrent verification after the OTP has been consumed', async () => {
+    setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue({
+      otpHash: otpHash('user-1', '123456'),
+      expiresAt: new Date(Date.now() + 60_000), attempts: 0, usedAt: null,
+    });
+    setup.db.passwordResetOtp.updateMany.mockResolvedValue({ count: 0 });
+    await expect(setup.service.verifyOtp('person@example.com', '123456'))
+      .rejects.toThrow(/incorrect or has expired/i);
+    expect(setup.db.passwordResetToken.create).not.toHaveBeenCalled();
+    expect(setup.mail.sendResetLink).not.toHaveBeenCalled();
+  });
+
+  it('returns a friendly error and unlocks retry if sending the link fails', async () => {
+    setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue({
+      otpHash: otpHash('user-1', '123456'),
+      expiresAt: new Date(Date.now() + 60_000), attempts: 0, usedAt: null,
+    });
+    setup.mail.sendResetLink.mockRejectedValue(new Error('SMTP failed'));
+    await expect(setup.service.verifyOtp('person@example.com', '123456'))
+      .rejects.toThrow(/could not email your reset link/i);
+    expect(setup.db.passwordResetToken.delete).toHaveBeenCalledWith({ where: { id: 'token-1' } });
+    expect(setup.db.passwordResetOtp.updateMany).toHaveBeenCalledTimes(2);
+    expect(setup.db.passwordResetOtp.updateMany.mock.calls[1]?.[0]).toMatchObject({
+      data: { usedAt: null },
     });
   });
 

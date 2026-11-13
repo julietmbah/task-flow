@@ -191,6 +191,25 @@ export async function requestPasswordReset(email: string): Promise<{ message: st
   })
 }
 
+/** Ask for another verification code (the server enforces resend protection). */
+export async function resendPasswordOtp(email: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/resend-password-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  })
+}
+
+/** Verify the six-digit code; a reset link is then emailed by the server. */
+export async function verifyPasswordOtp(
+  email: string,
+  otp: string,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/verify-password-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase(), otp }),
+  })
+}
+
 /** Redeem a one-time password reset link. */
 export async function resetPasswordWithToken(
   token: string,

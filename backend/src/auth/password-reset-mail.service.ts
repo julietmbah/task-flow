@@ -32,6 +32,43 @@ export class PasswordResetMailService {
     }
   }
 
+  /** Email a six-digit verification code, not the reset link. */
+  async sendVerificationCode(to: string, code: string): Promise<void> {
+    if (!this.isConfigured()) {
+      throw new Error('Password recovery email is not configured.');
+    }
+
+    const host = this.config.getOrThrow<string>('SMTP_HOST').trim();
+    const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
+    const user = this.config.get<string>('SMTP_USER')?.trim();
+    const password = this.config.get<string>('SMTP_PASSWORD');
+    const from = this.config.getOrThrow<string>('SMTP_FROM').trim();
+
+    const smtp = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      requireTLS: port !== 465 &&
+        this.config.get<string>('SMTP_REQUIRE_TLS') !== 'false',
+      auth: user && password ? { user, pass: password } : undefined,
+    });
+
+    await smtp.sendMail({
+      from,
+      to,
+      subject: 'Your TaskFlow password recovery code',
+      text: [
+        'Someone requested help resetting the password for this TaskFlow account.',
+        '',
+        `Your six-digit verification code is: ${code}`,
+        '',
+        'Enter this code on the TaskFlow verification page to receive a password reset link.',
+        'This code expires in 10 minutes and can only be used once.',
+        'If you did not request a password reset, ignore this email.',
+      ].join('\n'),
+    });
+  }
+
   async sendResetLink(to: string, rawToken: string): Promise<void> {
     if (!this.isConfigured()) {
       throw new Error('Password recovery email is not configured.');
