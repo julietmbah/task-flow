@@ -42,6 +42,12 @@ model User {
   // At most one pending email verification code for password recovery.
   passwordResetOtp PasswordResetOtp?
 
+  // Account email must be verified before sign-in. NULL means pending.
+  emailVerifiedAt DateTime?
+
+  // At most one pending registration verification code per account.
+  registrationOtp RegistrationOtp?
+
   // Automatically record when the user was created.
   createdAt DateTime @default(now())
 
@@ -157,6 +163,30 @@ model PasswordResetOtp {
   attempts Int @default(0)
 
   // Set after verification to prevent another successful use.
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+}
+
+// =====================================================
+// REGISTRATION EMAIL OTP MODEL (DAY 16)
+// =====================================================
+
+// Each new account has at most one pending registration OTP.
+// Only a keyed hash is stored; never store the six-digit code itself.
+model RegistrationOtp {
+  id String @id @default(uuid())
+
+  // One challenge per account; successful resend replaces the old code.
+  userId String @unique
+  otpHash String
+  expiresAt DateTime
+  attempts Int @default(0)
   usedAt DateTime?
 
   createdAt DateTime @default(now())

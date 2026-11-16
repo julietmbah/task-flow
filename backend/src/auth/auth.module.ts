@@ -10,10 +10,12 @@ import { ProfileController } from './profile.controller.js';
 import { PasswordResetController } from './password-reset.controller.js';
 import { PasswordResetMailService } from './password-reset-mail.service.js';
 import { PasswordResetService } from './password-reset.service.js';
+import { RegistrationOtpService } from './registration-otp.service.js';
+import { RegistrationOtpMailService } from './registration-otp-mail.service.js';
 
 /**
- * Existing login, registration, and profile providers are unchanged.
- * Only the public password-recovery controller and its services are added.
+ * Existing password recovery and profile services remain in place.
+ * Day 16 adds registration verification providers.
  */
 @Module({
   imports: [
@@ -42,6 +44,8 @@ import { PasswordResetService } from './password-reset.service.js';
     JwtAuthGuard,
     PasswordResetMailService,
     PasswordResetService,
+    RegistrationOtpMailService,
+    RegistrationOtpService,
   ],
   exports: [JwtModule, JwtAuthGuard],
 })

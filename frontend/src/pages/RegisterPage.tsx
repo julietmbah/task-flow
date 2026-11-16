@@ -1,5 +1,5 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 
 import { registerUser } from '../services/authApi'
 import type { RegisterRequest } from '../types/auth'
@@ -47,8 +47,10 @@ function validateRegistration(form: RegisterForm): RegisterErrors {
     errors.email = 'Enter a valid email address.'
   }
 
-  if (form.password.length < 8) {
-    errors.password = 'Your password must have at least 8 characters.'
+  if (form.password.length < 12) {
+    errors.password = 'Use at least 12 characters for your password.'
+  } else if (new TextEncoder().encode(form.password).length > 72) {
+    errors.password = 'This password is too long. Try a shorter one.'
   }
 
   if (!form.confirmPassword) {
@@ -238,13 +240,12 @@ function RegistrationSuccess({ account }: { account: RegisteredAccount }) {
       </div>
 
       <span className="signup-success-eyebrow">
-        <RegisterIcon name="check" size={14} /> Account created successfully
+        <RegisterIcon name="mail" size={14} /> Verify your email to finish
       </span>
 
       <h2 id="signup-success-title">Welcome to TaskFlow, {firstName}!</h2>
       <p className="signup-success-lead">
-        Your workspace is ready. You're just one sign-in away from
-        organizing your day with confidence.
+        We've sent a six-digit code to your email. Verify it to activate your account.
       </p>
 
       <div className="signup-account-summary">
@@ -256,7 +257,7 @@ function RegistrationSuccess({ account }: { account: RegisteredAccount }) {
           <strong>{account.name}</strong>
           <span className="signup-account-email">{account.email}</span>
         </div>
-        <span className="signup-account-verified" title="Account created successfully">
+        <span className="signup-account-verified" title="Account created; email verification pending">
           <RegisterIcon name="check" size={18} />
         </span>
       </div>
@@ -265,18 +266,18 @@ function RegistrationSuccess({ account }: { account: RegisteredAccount }) {
         <span className="signup-next-step-kicker">WHAT'S NEXT?</span>
         <div className="signup-step">
           <span className="signup-step-icon signup-step-icon--done"><RegisterIcon name="check" size={16} /></span>
-          <div><strong>Account created</strong><small>Registration complete</small></div>
+          <div><strong>Account created</strong><small>Email confirmation pending</small></div>
           <span className="signup-step-badge">Done</span>
         </div>
         <div className="signup-step signup-step--current">
           <span className="signup-step-icon">2</span>
-          <div><strong>Sign in to your workspace</strong><small>Use your new email and password</small></div>
+          <div><strong>Verify your email</strong><small>Enter the code we just sent</small></div>
           <RegisterIcon name="arrow" size={17} />
         </div>
       </div>
 
-      <Link className="signup-submit signup-submit-link" to="/login">
-        Continue to sign in
+      <Link className="signup-submit signup-submit-link" to="/verify-registration-otp" state={{ email: account.email, name: account.name, requestedAt: Date.now() }}>
+        Continue to verify
         <RegisterIcon name="arrow" size={19} />
       </Link>
       <p className="signup-success-footnote">
@@ -287,6 +288,7 @@ function RegistrationSuccess({ account }: { account: RegisteredAccount }) {
 }
 
 export default function RegisterPage() {
+  const navigate = useNavigate()
   const [form, setForm] = useState<RegisterForm>(INITIAL_FORM)
   const [errors, setErrors] = useState<RegisterErrors>({})
   const [serverError, setServerError] = useState('')
@@ -327,6 +329,16 @@ export default function RegisterPage() {
       setRegisteredAccount({
         name: created.name || registration.name,
         email: created.email || registration.email,
+      })
+      // A pending account may sign in only after this email verification.
+      // Pass only public details through navigation; never pass the password.
+      navigate('/verify-registration-otp', {
+        replace: true,
+        state: {
+          email: created.email || registration.email,
+          name: created.name || registration.name,
+          requestedAt: Date.now(),
+        },
       })
       setForm(INITIAL_FORM)
       setShowPassword(false)
@@ -417,7 +429,7 @@ export default function RegisterPage() {
                       name="password"
                       type={showPassword ? 'text' : 'password'}
                       autoComplete="new-password"
-                      placeholder="At least 8 characters"
+                      placeholder="At least 12 characters"
                       value={form.password}
                       onChange={(event) => updateField('password', event.target.value)}
                       aria-invalid={Boolean(errors.password)}
@@ -438,7 +450,7 @@ export default function RegisterPage() {
                   {errors.password ? (
                     <p id="signup-password-error" className="signup-field-error" role="alert">{errors.password}</p>
                   ) : (
-                    <p id="signup-password-help" className="signup-field-hint">Use at least 8 characters.</p>
+                    <p id="signup-password-help" className="signup-field-hint">Use at least 12 characters.</p>
                   )}
                 </div>
 
@@ -477,7 +489,7 @@ export default function RegisterPage() {
 
                 <button className="signup-submit" type="submit" disabled={isSubmitting}>
                   {isSubmitting ? (
-                    <><span className="signup-button-spinner" aria-hidden="true" /> Creating your account…</>
+                    <><span className="signup-button-spinner" aria-hidden="true" /> Creating your account</>
                   ) : (
                     <>Create your account <RegisterIcon name="arrow" size={19} /></>
                   )}
@@ -486,6 +498,9 @@ export default function RegisterPage() {
 
               <p className="signup-login-prompt">
                 Already part of TaskFlow? <Link to="/login">Sign in instead</Link>
+              </p>
+              <p className="signup-security-note">
+                Already signed up but haven't verified your email? <Link to="/verify-registration-otp">Verify your email</Link>
               </p>
               <p className="signup-security-note">
                 <RegisterIcon name="shield" size={16} /> Your information is handled securely.

@@ -3477,3 +3477,29 @@ html[data-theme='dark'] .otp-card { box-shadow: 0 14px 35px rgba(0, 0, 0, .18); 
 @media (prefers-reduced-motion: reduce) {
   .otp-input-row input { transition: none; }
 }
+
+/* Day 16 — Registration email verification (reuses Day 15 OTP components). */
+.registration-otp-card .otp-form { gap: 18px; }
+.registration-otp-expiry {
+  margin: 0; padding: 12px 14px;
+  border: 1px solid var(--tf-border); border-radius: 12px;
+  background: var(--tf-canvas); color: var(--tf-muted);
+  font-size: 13px; line-height: 1.55;
+}
+.registration-otp-expiry strong { color: var(--tf-heading); font-weight: 750; }
+.registration-otp-card .otp-input-row input { font-variant-numeric: tabular-nums; }
+
+/* Day 16: 10-minute resend wait and clear OTP request loading states. */
+.otp-resend-button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; }
+.otp-resend-count { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 750; }
+.otp-action-spinner { display: inline-block; flex: 0 0 16px; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: signup-spin .75s linear infinite; vertical-align: middle; }
+.registration-otp-expiry.otp-expired { border-color: #ef9d9d; background: #fff4f4; color: #8f2424; }
+.registration-otp-expiry.otp-expired strong { color: #781a1a; }
+html[data-theme='dark'] .registration-otp-expiry.otp-expired { background: #3c2028; border-color: #8b454f; color: #ffd0d5; }
+html[data-theme='dark'] .registration-otp-expiry.otp-expired strong { color: #ffe0e4; }
+@media (prefers-reduced-motion: reduce) { .otp-action-spinner { animation-duration: 1.5s; } }
+
+/* Day 16: loading indicator for Login, retained after signup UI restoration. */
+.tf-login-spinner { display:inline-block; flex:0 0 17px; width:17px; height:17px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; animation:tf-login-spin .7s linear infinite; }
+@keyframes tf-login-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tf-login-spinner { animation-duration:1.6s; } }
