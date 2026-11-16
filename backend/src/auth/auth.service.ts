@@ -80,6 +80,7 @@ export class AuthService {
           name,
           email,
           passwordHash,
+          emailVerifiedAt: null,
         },
 
         // Return only safe public information.
@@ -139,6 +140,7 @@ export class AuthService {
         name: true,
         email: true,
         passwordHash: true,
+        emailVerifiedAt: true,
         createdAt: true,
       },
     });
@@ -165,6 +167,13 @@ export class AuthService {
     if (!passwordMatches) {
       throw new UnauthorizedException(
         'Invalid email or password.',
+      );
+    }
+
+    // Unverified new accounts must not receive a login token.
+    if (!user.emailVerifiedAt) {
+      throw new UnauthorizedException(
+        'Please verify your email address before signing in.',
       );
     }
 

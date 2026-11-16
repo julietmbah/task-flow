@@ -244,9 +244,10 @@ export default function LoginPage() {
               type="submit"
               className="login-button"
               disabled={isSubmitting}
+              aria-busy={isSubmitting}
             >
               {isSubmitting ? (
-                'Signing in...'
+                <><span className="tf-login-spinner" aria-hidden="true" /> Signing in…</>
               ) : (
                 <>
                   Sign in
@@ -262,6 +263,15 @@ export default function LoginPage() {
                 role="alert"
               >
                 {errorMessage}
+                {errorMessage.toLowerCase().includes('verify your email') && (
+                  <Link
+                    className="auth-text-link"
+                    to="/verify-registration-otp"
+                    state={{ email: email.trim().toLowerCase(), requestedAt: 0 }}
+                  >
+                    Verify your email →
+                  </Link>
+                )}
               </p>
             )}
           </form>

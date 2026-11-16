@@ -220,3 +220,22 @@ export async function resetPasswordWithToken(
     body: JSON.stringify({ token, newPassword }),
   })
 }
+
+/** Activate a pending registration only after verifying the six-digit email code. */
+export async function verifyRegistrationOtp(
+  email: string,
+  otp: string,
+): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/verify-registration-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase(), otp }),
+  })
+}
+
+/** Request a replacement code for a registration that is still awaiting verification. */
+export async function resendRegistrationOtp(email: string): Promise<{ message: string }> {
+  return apiRequest<{ message: string }>('/auth/resend-registration-otp', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  })
+}

@@ -5,7 +5,12 @@ import { resendPasswordOtp, verifyPasswordOtp } from '../services/authApi'
 import RecoveryAuthLayout from './RecoveryAuthLayout'
 
 const CODE_LENGTH = 6
+const OTP_LIFETIME_MS = 10 * 60_000
 const RESEND_COOLDOWN_MS = 60_000
+
+function formatCountdown(seconds: number): string {
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+}
 
 interface RecoveryLocationState {
   email: string
@@ -24,22 +29,14 @@ function blankCode() {
   return Array<string>(CODE_LENGTH).fill('')
 }
 
-function secondsUntil(timestamp: number) {
-  return Math.max(0, Math.ceil((timestamp - Date.now()) / 1000))
-}
-
 /** Verify an email code before the server sends a one-time password reset link. */
 export default function VerifyPasswordOtpPage() {
   const location = useLocation()
   const recoveryState = readLocationState(location.state)
   const [email, setEmail] = useState(() => recoveryState?.email ?? '')
   const [code, setCode] = useState<string[]>(blankCode)
-  const [resendAvailableAt, setResendAvailableAt] = useState(
-    () => recoveryState ? recoveryState.requestedAt + RESEND_COOLDOWN_MS : 0,
-  )
-  const [secondsRemaining, setSecondsRemaining] = useState(() =>
-    secondsUntil(recoveryState ? recoveryState.requestedAt + RESEND_COOLDOWN_MS : 0),
-  )
+  const [issuedAt, setIssuedAt] = useState(() => recoveryState?.requestedAt ?? 0)
+  const [now, setNow] = useState(Date.now)
   const [isVerifying, setIsVerifying] = useState(false)
   const [isResending, setIsResending] = useState(false)
   const [verified, setVerified] = useState(false)
@@ -48,16 +45,16 @@ export default function VerifyPasswordOtpPage() {
   const inputRefs = useRef<(HTMLInputElement | null)[]>([])
 
   useEffect(() => {
-    if (!resendAvailableAt) return
-    const interval = window.setInterval(() => {
-      setSecondsRemaining(secondsUntil(resendAvailableAt))
-    }, 1000)
+    const interval = window.setInterval(() => setNow(Date.now()), 1000)
     return () => window.clearInterval(interval)
-  }, [resendAvailableAt])
+  }, [])
 
   const normalizedEmail = email.trim().toLowerCase()
   const enteredCode = code.join('')
   const busy = isVerifying || isResending
+  const resendSeconds = issuedAt > 0 ? Math.max(0, Math.ceil((issuedAt + RESEND_COOLDOWN_MS - now) / 1000)) : 0
+  const expirySeconds = issuedAt > 0 ? Math.max(0, Math.ceil((issuedAt + OTP_LIFETIME_MS - now) / 1000)) : 0
+  const expired = issuedAt > 0 && expirySeconds === 0
 
   function updateCode(index: number, value: string) {
     const numbers = value.replace(/\D/g, '')
@@ -103,6 +100,10 @@ export default function VerifyPasswordOtpPage() {
     if (busy || verified) return
     setErrorMessage('')
     setNotice('')
+    if (expired) {
+      setErrorMessage('This code has expired. Select Resend code to request another one.')
+      return
+    }
     if (!normalizedEmail || !/^[0-9]{6}$/.test(enteredCode)) {
       setErrorMessage('Please enter your email and the complete six-digit code.')
       return
@@ -125,7 +126,7 @@ export default function VerifyPasswordOtpPage() {
   }
 
   async function handleResend() {
-    if (busy || verified || secondsRemaining > 0) return
+    if (busy || verified || resendSeconds > 0) return
     if (!normalizedEmail) {
       setErrorMessage('Enter your email address first.')
       return
@@ -137,9 +138,10 @@ export default function VerifyPasswordOtpPage() {
     try {
       await resendPasswordOtp(normalizedEmail)
       setCode(blankCode())
-      setResendAvailableAt(Date.now() + RESEND_COOLDOWN_MS)
-      setSecondsRemaining(60)
-      setNotice('If an account exists for this email, a new code is on its way. Please check your inbox.')
+      const timestamp = Date.now()
+      setIssuedAt(timestamp)
+      setNow(timestamp)
+      setNotice('If a new code was sent, check your inbox or Spam folder. Use the newest code you receive.')
       inputRefs.current[0]?.focus()
     } catch (error: unknown) {
       setErrorMessage(
@@ -232,14 +234,19 @@ export default function VerifyPasswordOtpPage() {
                 ))}
               </div>
             </fieldset>
-            <p className="otp-help-text">The code expires after 10 minutes. You can paste all six digits at once.</p>
+            <p className={`registration-otp-expiry${expired ? ' otp-expired' : ''}`} role={expired ? 'status' : undefined}>
+              {expired ? (
+                <>Your password recovery code has <strong>expired.</strong> Select <strong>Resend code</strong> below to request a new one.</>
+              ) : (
+                <>Your verification code expires <strong>10 minutes after it is sent.</strong></>
+              )}
+            </p>
 
             {notice && <div className="form-feedback recovery-success" role="status">{notice}</div>}
             {errorMessage && <p className="form-feedback form-error" role="alert">{errorMessage}</p>}
 
-            <button className="login-button otp-verify-button" type="submit" disabled={busy || enteredCode.length !== CODE_LENGTH || !normalizedEmail}>
-              {isVerifying ? 'Verifying…' : 'Verify and send reset link'}
-              {!isVerifying && <span aria-hidden="true">→</span>}
+            <button className="login-button otp-verify-button" type="submit" disabled={busy || expired || enteredCode.length !== CODE_LENGTH || !normalizedEmail}>
+              {isVerifying ? <><span className="otp-action-spinner" aria-hidden="true" /> Verifying code</> : <>Verify and send reset link <span aria-hidden="true">→</span></>}
             </button>
           </form>
 
@@ -248,14 +255,14 @@ export default function VerifyPasswordOtpPage() {
             <button
               type="button"
               className="otp-resend-button"
-              disabled={busy || secondsRemaining > 0}
+              disabled={busy || resendSeconds > 0}
               onClick={handleResend}
             >
-              {isResending
-                ? 'Sending…'
-                : secondsRemaining > 0
-                  ? `Resend in ${secondsRemaining}s`
-                  : 'Resend code'}
+              {isResending ? (
+                <><span className="otp-action-spinner" aria-hidden="true" /> Sending code</>
+              ) : (
+                <>Resend code{resendSeconds > 0 && <span className="otp-resend-count">({formatCountdown(resendSeconds)})</span>}</>
+              )}
             </button>
           </div>
           <p className="otp-help-text otp-spam-note">Check your Spam or Junk folder if you don't see the email.</p>

@@ -16,6 +16,7 @@ import {
 
 import { AuthController } from './auth.controller.js';
 import { AuthService } from './auth.service.js';
+import { RegistrationOtpService } from './registration-otp.service.js';
 
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
@@ -43,6 +44,14 @@ describe('AuthController', () => {
     login: vi.fn(),
   };
 
+  const registrationOtpMock = {
+    ensureMailAvailable: vi.fn(),
+    validateRegistrationEmail: vi.fn(),
+    sendInitialCode: vi.fn(),
+    resend: vi.fn(),
+    verify: vi.fn(),
+  };
+
   // ===================================================
   // TEST SETUP
   // ===================================================
@@ -60,6 +69,10 @@ describe('AuthController', () => {
           {
             provide: AuthService,
             useValue: authServiceMock,
+          },
+          {
+            provide: RegistrationOtpService,
+            useValue: registrationOtpMock,
           },
         ],
       })
@@ -252,4 +265,26 @@ describe('AuthController', () => {
 
     expect(authServiceMock.login).not.toHaveBeenCalled();
   });
+
+  it('sends a registration code after account creation', async () => {
+    const data: RegisterDto = {
+      name: 'Alice Example', email: 'alice@example.com', password: 'SecurePassword123!',
+    };
+    authServiceMock.register.mockResolvedValue({ id: 'user-123', email: data.email });
+    await controller.register(data);
+    expect(registrationOtpMock.ensureMailAvailable).toHaveBeenCalledOnce();
+    expect(registrationOtpMock.sendInitialCode).toHaveBeenCalledWith('user-123', data.email);
+  });
+
+  it('forwards registration resend and verification requests', async () => {
+    registrationOtpMock.resend.mockResolvedValue({ message: 'Code requested.' });
+    registrationOtpMock.verify.mockResolvedValue({ message: 'Verified.' });
+    await expect(controller.resendRegistrationOtp({ email: 'alice@example.com' }))
+      .resolves.toEqual({ message: 'Code requested.' });
+    await expect(controller.verifyRegistrationOtp({ email: 'alice@example.com', otp: '123456' }))
+      .resolves.toEqual({ message: 'Verified.' });
+    expect(registrationOtpMock.resend).toHaveBeenCalledWith('alice@example.com');
+    expect(registrationOtpMock.verify).toHaveBeenCalledWith('alice@example.com', '123456');
+  });
+
 });

@@ -8,6 +8,7 @@ import {
 import LoginPage from './pages/LoginPage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import VerifyPasswordOtpPage from './pages/VerifyPasswordOtpPage'
+import VerifyRegistrationOtpPage from './pages/VerifyRegistrationOtpPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
@@ -60,6 +61,7 @@ export default function App() {
       {/* Public authentication pages. */}
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/verify-registration-otp" element={<VerifyRegistrationOtpPage />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/verify-password-otp" element={<VerifyPasswordOtpPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -69,8 +69,7 @@ export default function ForgotPasswordPage() {
         )}
 
         <button className="login-button" type="submit" disabled={isSending}>
-          {isSending ? 'Sending code…' : 'Send verification code'}
-          {!isSending && <span aria-hidden="true">→</span>}
+          {isSending ? <><span className="otp-action-spinner" aria-hidden="true" /> Sending verification code</> : <>Send verification code <span aria-hidden="true">→</span></>}
         </button>
         <p className="recovery-password-hint">
           For your security, verification codes expire after 10 minutes.

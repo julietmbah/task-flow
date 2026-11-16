@@ -26,6 +26,8 @@ describe('AuthService - User Login', () => {
   // This variable will contain a real bcrypt hash.
   let passwordHash: string;
 
+  const verifiedAt = new Date('2026-10-21T12:01:00Z');
+
   // Sample user data matching our Prisma User model.
   const userData = {
     id: 'test-user-id',
@@ -104,6 +106,7 @@ describe('AuthService - User Login', () => {
     prismaMock.user.findUnique.mockResolvedValue({
       ...userData,
       passwordHash,
+      emailVerifiedAt: verifiedAt,
     });
 
     // Attempt login using the correct credentials.
@@ -138,6 +141,7 @@ describe('AuthService - User Login', () => {
     prismaMock.user.findUnique.mockResolvedValue({
       ...userData,
       passwordHash,
+      emailVerifiedAt: verifiedAt,
     });
 
     // Supply uppercase letters and surrounding spaces.
@@ -186,6 +190,7 @@ describe('AuthService - User Login', () => {
     prismaMock.user.findUnique.mockResolvedValue({
       ...userData,
       passwordHash,
+      emailVerifiedAt: verifiedAt,
     });
 
     // Supply an incorrect password.
@@ -208,6 +213,7 @@ describe('AuthService - User Login', () => {
     prismaMock.user.findUnique.mockResolvedValue({
       ...userData,
       passwordHash,
+      emailVerifiedAt: verifiedAt,
     });
 
     // This differs from the real password in case.

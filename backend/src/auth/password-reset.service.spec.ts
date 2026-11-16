@@ -111,7 +111,7 @@ describe('PasswordResetService', () => {
     expect(created.data.attempts).toBe(0);
   });
 
-  it('blocks resend attempts during the sixty-second cooldown', async () => {
+  it('blocks immediate resend attempts during the 60-second cooldown', async () => {
     setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
     setup.db.passwordResetOtp.findUnique.mockResolvedValue({ createdAt: new Date() });
     const result = await setup.service.requestReset('person@example.com');
@@ -119,10 +119,18 @@ describe('PasswordResetService', () => {
     expect(setup.mail.sendVerificationCode).not.toHaveBeenCalled();
   });
 
+  it('blocks resend before 60 seconds, without replacing the current code', async () => {
+    setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
+    setup.db.passwordResetOtp.findUnique.mockResolvedValue({ createdAt: new Date(Date.now() - 59_000) });
+    await setup.service.requestReset('person@example.com');
+    expect(setup.mail.sendVerificationCode).not.toHaveBeenCalled();
+    expect(setup.db.passwordResetOtp.updateMany).not.toHaveBeenCalled();
+  });
+
   it('reissues after cooldown, resetting expiry, attempts and single-use status', async () => {
     setup.db.user.findUnique.mockResolvedValue({ id: 'user-1', email: 'person@example.com' });
     setup.db.passwordResetOtp.findUnique.mockResolvedValue({
-      createdAt: new Date(Date.now() - 70_000),
+      createdAt: new Date(Date.now() - 61_000),
     });
     await setup.service.requestReset('person@example.com');
     const args = setup.db.passwordResetOtp.updateMany.mock.calls[0]?.[0] as {
