@@ -48,6 +48,9 @@ model User {
   // At most one pending registration verification code per account.
   registrationOtp RegistrationOtp?
 
+  // At most one pending email change challenge per signed-in user.
+  changeEmailOtp ChangeEmailOtp?
+
   // Automatically record when the user was created.
   createdAt DateTime @default(now())
 
@@ -195,4 +198,32 @@ model RegistrationOtp {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([expiresAt])
+}
+
+// =====================================================
+// CHANGE EMAIL OTP MODEL
+// =====================================================
+
+// The user's existing email remains unchanged until the new address is
+// verified. Only an HMAC hash of the OTP is stored, never the code itself.
+model ChangeEmailOtp {
+  id String @id @default(uuid())
+
+  // Each signed-in user can have one active email change challenge.
+  userId String @unique
+
+  // The address being verified. It is NOT the user's current email yet.
+  newEmail String
+  otpHash String
+  expiresAt DateTime
+  attempts Int @default(0)
+  usedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([newEmail])
 }

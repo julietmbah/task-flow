@@ -12,6 +12,9 @@ import { PasswordResetMailService } from './password-reset-mail.service.js';
 import { PasswordResetService } from './password-reset.service.js';
 import { RegistrationOtpService } from './registration-otp.service.js';
 import { RegistrationOtpMailService } from './registration-otp-mail.service.js';
+import { ChangeEmailOtpController } from './change-email-otp.controller.js';
+import { ChangeEmailOtpService } from './change-email-otp.service.js';
+import { ChangeEmailOtpMailService } from './change-email-otp-mail.service.js';
 
 /**
  * Existing password recovery and profile services remain in place.
@@ -38,6 +41,7 @@ import { RegistrationOtpMailService } from './registration-otp-mail.service.js';
     AuthController,
     ProfileController,
     PasswordResetController,
+    ChangeEmailOtpController,
   ],
   providers: [
     AuthService,
@@ -46,6 +50,8 @@ import { RegistrationOtpMailService } from './registration-otp-mail.service.js';
     PasswordResetService,
     RegistrationOtpMailService,
     RegistrationOtpService,
+    ChangeEmailOtpMailService,
+    ChangeEmailOtpService,
   ],
   exports: [JwtModule, JwtAuthGuard],
 })

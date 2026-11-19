@@ -3503,3 +3503,40 @@ html[data-theme='dark'] .registration-otp-expiry.otp-expired strong { color: #ff
 .tf-login-spinner { display:inline-block; flex:0 0 17px; width:17px; height:17px; border:2px solid rgba(255,255,255,.35); border-top-color:#fff; border-radius:50%; animation:tf-login-spin .7s linear infinite; }
 @keyframes tf-login-spin { to { transform:rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .tf-login-spinner { animation-duration:1.6s; } }
+
+
+/* Change Email — authenticated profile verification (separate from Change Password). */
+.tf-change-email { margin-top: 20px; }
+.tf-change-email .tf-profile-section-heading { margin-bottom: 18px; }
+.tf-change-email-label { display: block; margin: 18px 0 8px; color: var(--tf-heading); font-size: 12px; font-weight: 750; }
+.tf-change-email-current { display: flex; flex-wrap: wrap; gap: 7px 15px; padding: 14px 16px; border: 1px solid var(--tf-border); border-radius: 10px; background: var(--tf-canvas); font-size: 12px; }
+.tf-change-email-current span { color: var(--tf-muted); }
+.tf-change-email-current strong { color: var(--tf-heading); overflow-wrap: anywhere; }
+.tf-change-email-input { display: block; width: min(100%, 460px); min-height: 46px; padding: 11px 13px; border: 1px solid var(--tf-border); border-radius: 9px; background: var(--tf-surface); color: var(--tf-text); font: inherit; font-size: 14px; }
+.tf-change-email-input:focus, .tf-change-email-digit:focus { outline: 2px solid var(--tf-primary); outline-offset: 2px; }
+.tf-change-email-help { max-width: 600px; margin: 9px 0 0; color: var(--tf-muted); font-size: 12px; line-height: 1.65; }
+.tf-change-email-submit { margin-top: 20px; justify-content: center; }
+.tf-change-email-submit:disabled { opacity: .65; cursor: not-allowed; }
+.tf-change-email-notice { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 13px 15px; margin-bottom: 18px; border: 1px solid; border-radius: 9px; font-size: 12px; line-height: 1.5; }
+.tf-change-email-notice > span { min-width: 0; overflow-wrap: anywhere; }
+.tf-change-email-notice button { flex: 0 0 auto; padding: 0 2px; border: 0; background: transparent; color: inherit; font-size: 20px; line-height: 1; }
+.tf-change-email-notice--success { border-color: #a4e6ca; background: #e9faf2; color: #096b49; }
+.tf-change-email-notice--error { border-color: #fac2bd; background: #fff2f1; color: #a72922; }
+.tf-change-email-sent-to { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 14px; padding: 14px 16px; border-radius: 10px; background: var(--tf-canvas); font-size: 12px; }
+.tf-change-email-sent-to span { color: var(--tf-muted); }
+.tf-change-email-sent-to strong { color: var(--tf-heading); overflow-wrap: anywhere; }
+.tf-change-email-sent-to button { margin-left: auto; border: 0; background: transparent; color: var(--tf-primary); font: inherit; font-weight: 750; cursor: pointer; }
+.tf-change-email-digits { display: flex; gap: 10px; flex-wrap: wrap; }
+.tf-change-email-digit { width: 49px; height: 55px; min-width: 0; border: 1px solid var(--tf-border); border-radius: 10px; background: var(--tf-surface); color: var(--tf-heading); font: inherit; font-size: 22px; font-weight: 750; text-align: center; }
+.tf-change-email-digit:disabled { opacity: .7; cursor: not-allowed; }
+.tf-change-email-timer { margin: 14px 0 0; color: var(--tf-muted); font-size: 12px; }
+.tf-change-email-timer--expired { color: #bd3434; font-weight: 750; }
+.tf-change-email-resend { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; margin-top: 20px; font-size: 12px; color: var(--tf-muted); }
+.tf-change-email-resend button { display: inline-flex; align-items: center; gap: 7px; padding: 7px 0; border: 0; background: transparent; color: var(--tf-primary); font: inherit; font-weight: 750; cursor: pointer; }
+.tf-change-email-resend button:disabled, .tf-change-email-sent-to button:disabled { cursor: not-allowed; opacity: .58; }
+.tf-change-email-spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: tf-change-email-spin .7s linear infinite; vertical-align: middle; }
+@keyframes tf-change-email-spin { to { transform: rotate(360deg); } }
+html[data-theme='dark'] .tf-change-email-notice--success { border-color: #2b7154; background: #163a31; color: #9ce6c4; }
+html[data-theme='dark'] .tf-change-email-notice--error { border-color: #89515c; background: #46242b; color: #ffd0cd; }
+@media (max-width: 460px) { .tf-change-email-digits { gap: 6px; } .tf-change-email-digit { flex: 1 1 0; width: 0; height: 48px; font-size: 19px; } .tf-change-email-submit { width: 100%; } .tf-change-email-sent-to button { margin-left: 0; } }
+@media (prefers-reduced-motion: reduce) { .tf-change-email-spinner { animation-duration: 1.5s; } }
