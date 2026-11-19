@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type FormEvent, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import ChangePasswordSection from './ChangePasswordSection'
+import ChangeEmailSection from './ChangeEmailSection'
 
 import { useAuth } from '../hooks/useAuth'
 import { getCurrentUser } from '../services/authApi'
@@ -173,6 +174,21 @@ export default function ProfilePage() {
       setNotice({ type: 'error', text: readableError(error, 'We could not update your name. Please try again.') })
     } finally {
       setBusy(null)
+    }
+  }
+
+  /** Refresh profile and saved session after the new address has been verified. */
+  const handleEmailVerified = (email: string) => {
+    if (!profile) return
+    const updated = { ...profile, email }
+    setProfile(updated)
+    updateUser(updated)
+    // Fetch the server's latest account details in the background.
+    if (accessToken) {
+      void getCurrentUser(accessToken).then((account) => {
+        setProfile(account)
+        updateUser(account)
+      }).catch(() => undefined)
     }
   }
 
@@ -360,7 +376,7 @@ export default function ProfilePage() {
                   </div>
                 )}
               </form>
-              <p className="tf-profile-readonly-note">Your email address cannot be changed here yet.</p>
+
             </section>
 
             <div className="tf-profile-side-column">
@@ -406,7 +422,10 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Account security stays on the Profile page. No changes to the dashboard shell. */}
+          {/* Change Email is separate from Change Password and requires its own OTP. */}
+          <ChangeEmailSection accessToken={accessToken} currentEmail={profile.email} onVerified={handleEmailVerified} />
+
+          {/* Change Password still requires only the current password, not OTP. */}
           <ChangePasswordSection accessToken={accessToken} />
         </>
       )}

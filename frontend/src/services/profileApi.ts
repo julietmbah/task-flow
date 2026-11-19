@@ -133,3 +133,61 @@ export async function changeProfilePassword(
 
   throw new Error(await messageFor(response))
 }
+
+
+/** Email-change OTP uses the current signed-in account, never the email in the URL. */
+interface EmailCodeResponse { message: string; newEmail: string }
+interface EmailVerifiedResponse { message: string; email: string }
+
+async function changeEmailError(response: Response): Promise<string> {
+  if (response.status === 401 || response.status === 403) {
+    return 'Your sign-in has ended. Please sign in again.'
+  }
+  const payload: unknown = await response.json().catch(() => null)
+  const raw = payload && typeof payload === 'object' && 'message' in payload
+    ? payload.message : null
+  const messages = typeof raw === 'string' ? [raw]
+    : Array.isArray(raw) ? raw.filter((value): value is string => typeof value === 'string') : []
+  // Show only known, safe API messages; don't expose internal error details.
+  const known = [
+    'Please enter a valid email address.',
+    'Please enter your new email address.',
+    'This is already your current email address.',
+    'This email address is already in use.',
+    'Please use a private email address.',
+    'Please wait 60 seconds before requesting another code.',
+    'Start a new email change request first.',
+    'This code is incorrect or has expired. Please request a new one.',
+    'Enter the six-digit code from your new email.',
+    'Email verification is temporarily unavailable. Please try again later.',
+    'We could not send the code. Your current email has not changed. Please try again.',
+    'Your account changed. Please start again.',
+  ]
+  const matchingMessage = messages.find((value) => known.includes(value))
+  if (matchingMessage) return matchingMessage
+  if (response.status === 429) return 'Too many attempts. Please try again later.'
+  if (response.status >= 500) return 'Something went wrong. Please try again shortly.'
+  return 'We could not complete your request. Please check your details and try again.'
+}
+
+async function emailPost<T>(accessToken: string, path: string, body?: unknown): Promise<T> {
+  const response = await request(accessToken, path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(body ?? {}),
+  })
+  if (!response.ok) throw new Error(await changeEmailError(response))
+  return response.json() as Promise<T>
+}
+
+export function requestChangeEmailOtp(accessToken: string, newEmail: string): Promise<EmailCodeResponse> {
+  return emailPost<EmailCodeResponse>(accessToken, '/email/request', { newEmail })
+}
+
+export function resendChangeEmailOtp(accessToken: string): Promise<EmailCodeResponse> {
+  return emailPost<EmailCodeResponse>(accessToken, '/email/resend')
+}
+
+export function verifyChangeEmailOtp(accessToken: string, otp: string): Promise<EmailVerifiedResponse> {
+  return emailPost<EmailVerifiedResponse>(accessToken, '/email/verify', { otp })
+}
