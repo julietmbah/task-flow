@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
+import { isEmailJsConfigured, sendEmailJs, useEmailJs } from './emailjs-delivery.js';
 
 /** Sends ownership verification codes only to the proposed new email. */
 @Injectable()
@@ -8,6 +9,9 @@ export class ChangeEmailOtpMailService {
   constructor(private readonly config: ConfigService) {}
 
   isConfigured(): boolean {
+    if (useEmailJs(this.config)) {
+      return isEmailJsConfigured(this.config, 'otp');
+    }
     const host = this.config.get<string>('SMTP_HOST')?.trim();
     const from = this.config.get<string>('SMTP_FROM')?.trim();
     const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
@@ -19,6 +23,10 @@ export class ChangeEmailOtpMailService {
 
   async sendCode(to: string, code: string): Promise<void> {
     if (!this.isConfigured()) throw new Error('Email delivery is not configured.');
+    if (useEmailJs(this.config)) {
+      await sendEmailJs(this.config, 'otp', { email: to, passcode: code });
+      return;
+    }
     const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
     const user = this.config.get<string>('SMTP_USER')?.trim();
     const password = this.config.get<string>('SMTP_PASSWORD');

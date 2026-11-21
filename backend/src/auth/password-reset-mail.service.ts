@@ -1,41 +1,44 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
+import { isEmailJsConfigured, sendEmailJs, useEmailJs } from './emailjs-delivery.js';
 
-/**
- * Sends account-recovery links through an SMTP provider.
- * Keep SMTP credentials in backend/.env (never in Git).
- */
+/** Send password recovery codes and links, using EmailJS on Render or SMTP locally. */
 @Injectable()
 export class PasswordResetMailService {
   constructor(private readonly config: ConfigService) {}
 
-  /** Allows the API to reject every request consistently if mail is unconfigured. */
   isConfigured(): boolean {
-    const host = this.config.get<string>('SMTP_HOST')?.trim();
-    const from = this.config.get<string>('SMTP_FROM')?.trim();
     const frontendUrl = this.config.get<string>('FRONTEND_URL')?.trim();
-    const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
-    const user = this.config.get<string>('SMTP_USER')?.trim();
-    const password = this.config.get<string>('SMTP_PASSWORD');
-
-    if (!host || !from || !frontendUrl || !Number.isInteger(port) || port < 1 || port > 65535) {
-      return false;
-    }
-    if (Boolean(user) !== Boolean(password)) return false;
-
+    if (!frontendUrl) return false;
     try {
       const parsed = new URL(frontendUrl);
-      return parsed.protocol === 'https:' || parsed.protocol === 'http:';
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return false;
     } catch {
       return false;
     }
+
+    if (useEmailJs(this.config)) {
+      return isEmailJsConfigured(this.config, 'otp') &&
+        isEmailJsConfigured(this.config, 'reset');
+    }
+
+    const host = this.config.get<string>('SMTP_HOST')?.trim();
+    const from = this.config.get<string>('SMTP_FROM')?.trim();
+    const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
+    const user = this.config.get<string>('SMTP_USER')?.trim();
+    const password = this.config.get<string>('SMTP_PASSWORD');
+    if (!host || !from || !Number.isInteger(port) || port < 1 || port > 65535) {
+      return false;
+    }
+    return Boolean(user) === Boolean(password);
   }
 
-  /** Email a six-digit verification code, not the reset link. */
   async sendVerificationCode(to: string, code: string): Promise<void> {
-    if (!this.isConfigured()) {
-      throw new Error('Password recovery email is not configured.');
+    if (!this.isConfigured()) throw new Error('Password recovery email is not configured.');
+    if (useEmailJs(this.config)) {
+      await sendEmailJs(this.config, 'otp', { email: to, passcode: code });
+      return;
     }
 
     const host = this.config.getOrThrow<string>('SMTP_HOST').trim();
@@ -43,7 +46,6 @@ export class PasswordResetMailService {
     const user = this.config.get<string>('SMTP_USER')?.trim();
     const password = this.config.get<string>('SMTP_PASSWORD');
     const from = this.config.getOrThrow<string>('SMTP_FROM').trim();
-
     const smtp = nodemailer.createTransport({
       host,
       port,
@@ -52,7 +54,6 @@ export class PasswordResetMailService {
         this.config.get<string>('SMTP_REQUIRE_TLS') !== 'false',
       auth: user && password ? { user, pass: password } : undefined,
     });
-
     await smtp.sendMail({
       from,
       to,
@@ -70,8 +71,15 @@ export class PasswordResetMailService {
   }
 
   async sendResetLink(to: string, rawToken: string): Promise<void> {
-    if (!this.isConfigured()) {
-      throw new Error('Password recovery email is not configured.');
+    if (!this.isConfigured()) throw new Error('Password recovery email is not configured.');
+
+    const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL').trim().replace(/\/+$/, '');
+    // Keep the token in the URL fragment, not in the query string.
+    const link = `${frontendUrl}/reset-password#token=${encodeURIComponent(rawToken)}`;
+
+    if (useEmailJs(this.config)) {
+      await sendEmailJs(this.config, 'reset', { email: to, reset_link: link });
+      return;
     }
 
     const host = this.config.getOrThrow<string>('SMTP_HOST').trim();
@@ -79,23 +87,14 @@ export class PasswordResetMailService {
     const user = this.config.get<string>('SMTP_USER')?.trim();
     const password = this.config.get<string>('SMTP_PASSWORD');
     const from = this.config.getOrThrow<string>('SMTP_FROM').trim();
-    const frontendUrl = this.config.getOrThrow<string>('FRONTEND_URL').trim().replace(/\/+$/, '');
-
-    // The token lives in the fragment, not the URL query string.
-    // Fragments are not sent to the web server in HTTP requests.
-    const link = `${frontendUrl}/reset-password#token=${encodeURIComponent(rawToken)}`;
-
     const smtp = nodemailer.createTransport({
       host,
       port,
       secure: port === 465,
-      // Keep TLS mandatory for remote SMTP. Set SMTP_REQUIRE_TLS=false
-      // only for a trusted LOCAL development mail catcher (e.g., Mailpit).
       requireTLS: port !== 465 &&
         this.config.get<string>('SMTP_REQUIRE_TLS') !== 'false',
       auth: user && password ? { user, pass: password } : undefined,
     });
-
     await smtp.sendMail({
       from,
       to,

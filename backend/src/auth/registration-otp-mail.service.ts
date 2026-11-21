@@ -1,13 +1,17 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer from 'nodemailer';
+import { isEmailJsConfigured, sendEmailJs, useEmailJs } from './emailjs-delivery.js';
 
-/** Registration-only email delivery. Reuses existing SMTP environment settings. */
+/** Registration-only email delivery. Uses EmailJS on Render, SMTP locally. */
 @Injectable()
 export class RegistrationOtpMailService {
   constructor(private readonly config: ConfigService) {}
 
   isConfigured(): boolean {
+    if (useEmailJs(this.config)) {
+      return isEmailJsConfigured(this.config, 'otp');
+    }
     const host = this.config.get<string>('SMTP_HOST')?.trim();
     const from = this.config.get<string>('SMTP_FROM')?.trim();
     const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
@@ -19,6 +23,10 @@ export class RegistrationOtpMailService {
 
   async sendRegistrationCode(to: string, code: string): Promise<void> {
     if (!this.isConfigured()) throw new Error('Email delivery is not configured.');
+    if (useEmailJs(this.config)) {
+      await sendEmailJs(this.config, 'otp', { email: to, passcode: code });
+      return;
+    }
     const port = Number(this.config.get<string>('SMTP_PORT') ?? '587');
     const user = this.config.get<string>('SMTP_USER')?.trim();
     const password = this.config.get<string>('SMTP_PASSWORD');
