@@ -12,6 +12,7 @@ import VerifyRegistrationOtpPage from './pages/VerifyRegistrationOtpPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
+import LandingPage from './pages/LandingPage'
 import ProtectedRoute from './routes/ProtectedRoute'
 
 /**
@@ -55,8 +56,8 @@ export default function App() {
 
   return (
     <Routes>
-      {/* Default entry point. */}
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      {/* Public landing page uses the existing app theme preference. */}
+      <Route path="/" element={<LandingPage theme={theme} onToggleTheme={toggleTheme} />} />
 
       {/* Public authentication pages. */}
       <Route path="/login" element={<LoginPage />} />
