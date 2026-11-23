@@ -3874,3 +3874,147 @@ button, input, select, textarea { font-family: inherit; }
 @media (prefers-reduced-motion: reduce) {
   .sidebar-signout { transition: none; }
 }
+
+
+/* TASKFLOW — COMPACT HERO FOR SMALL MOBILE PHONES */
+@media (max-width: 480px) {
+  .tf-landing .lp-hero {
+    padding-top: 24px;
+  }
+
+  .tf-landing .lp-hero-grid {
+    gap: 20px;
+    padding-bottom: 24px;
+  }
+
+  .tf-landing .lp-hero h1 {
+    font-size: clamp(32px, 8.8vw, 39px);
+    line-height: 1.15;
+    margin: 15px 0;
+  }
+
+  .tf-landing .lp-hero-description {
+    font-size: 13px;
+    line-height: 1.65;
+  }
+
+  .tf-landing .lp-hero-actions {
+    gap: 9px;
+    margin-top: 20px;
+  }
+
+  .tf-landing .lp-btn-large {
+    min-height: 44px;
+    padding: 11px 16px;
+    font-size: 12px;
+  }
+
+  .tf-landing .lp-hero-notes {
+    margin-top: 16px;
+    font-size: 10px;
+  }
+
+  .tf-landing .lp-hero-visual {
+    padding: 0;
+    min-width: 0;
+  }
+
+  .tf-landing .lp-preview-frame {
+    width: 100%;
+    border-radius: 13px;
+    box-shadow: 0 10px 28px rgba(67, 46, 133, .08);
+  }
+
+  .tf-landing .lp-preview-body {
+    padding: 10px;
+  }
+
+  .tf-landing .lp-preview-heading {
+    gap: 7px;
+    margin-bottom: 10px;
+  }
+
+  .tf-landing .lp-preview-heading h2 {
+    font-size: 15px;
+  }
+
+  .tf-landing .lp-preview-stats {
+    gap: 5px;
+    margin-bottom: 9px;
+  }
+
+  .tf-landing .lp-preview-stat {
+    padding: 9px 7px;
+    border-radius: 8px;
+  }
+
+  .tf-landing .lp-preview-stat strong {
+    font-size: 18px;
+    margin: 4px 0;
+  }
+
+  .tf-landing .lp-preview-card {
+    padding: 12px;
+    border-radius: 10px;
+  }
+
+  .tf-landing .lp-preview-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .tf-landing .lp-preview-task {
+    min-height: 39px;
+  }
+
+  .tf-landing .lp-preview-task-name {
+    font-size: 10px;
+  }
+
+  /* Weekly Focus remains visible below My Priorities */
+  .tf-landing .lp-preview-progress {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .tf-landing .lp-preview-donut {
+    width: 95px;
+    margin: 12px auto;
+  }
+
+  .tf-landing .lp-preview-progress > p {
+    margin-top: 7px;
+  }
+}
+
+@media (max-width: 360px) {
+  .tf-landing .lp-container {
+    width: calc(100% - 24px);
+  }
+
+  .tf-landing .lp-hero h1 {
+    font-size: 32px;
+  }
+
+  .tf-landing .lp-preview-topbar-label {
+    display: none;
+  }
+
+  .tf-landing .lp-preview-stat > span,
+  .tf-landing .lp-preview-stat small {
+    font-size: 8px;
+    white-space: normal;
+  }
+
+  .tf-landing .lp-preview-task {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 7px 0;
+  }
+
+  .tf-landing .lp-preview-tag {
+    font-size: 8px;
+  }
+}
+
