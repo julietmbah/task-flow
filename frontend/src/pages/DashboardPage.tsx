@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { Link, useLocation } from 'react-router'
+
 
 import { useAuth } from '../hooks/useAuth'
 import TasksPage from './TasksPage'
@@ -10,7 +11,7 @@ import ProfilePage from './ProfilePage'
  * TaskFlow dashboard
  *
  * - Displays real user information from the authentication provider.
- * - Keeps the light/dark toggle and Sign out visible in the top navbar.
+ * - Keeps the icon-only theme toggle in the navbar and Sign Out beside the sidebar user.
  * - Uses a greeting based on the user's local time when the page opens.
  * - Uses only the global src/index.css stylesheet.
  */
@@ -141,7 +142,6 @@ export default function DashboardPage({
   theme,
   onToggleTheme,
 }: DashboardPageProps) {
-  const navigate = useNavigate()
   const location = useLocation()
   const isTasksView = location.pathname === '/tasks'
   const isProfileView = location.pathname === '/profile'
@@ -190,11 +190,15 @@ export default function DashboardPage({
 
   const closeMenu = () => setMenuOpen(false)
 
-  /** Clear in-memory authentication and navigate to login. */
-  const handleLogout = () => {
-    signOut()
-    navigate('/login', { replace: true })
-  }
+  
+
+/** Sign out securely and return directly to the landing page. */
+const handleLogout = () => {
+  signOut()
+  window.location.replace('/')
+}
+
+
 
   return (
     <div className="dashboard-shell">
@@ -271,6 +275,15 @@ export default function DashboardPage({
               <strong>{user.name}</strong>
               <span>Signed in</span>
             </div>
+            <button
+              type="button"
+              className="sidebar-signout"
+              onClick={handleLogout}
+              aria-label="Sign out"
+              title="Sign out"
+            >
+              <Icon name="logout" size={19} />
+            </button>
           </div>
         </div>
       </aside>
@@ -313,19 +326,6 @@ export default function DashboardPage({
               title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             >
               <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={18} />
-              <span className="dashboard-nav-label">
-                {theme === 'dark' ? 'Light mode' : 'Dark mode'}
-              </span>
-            </button>
-
-            {/* Sign out is also in the top navigation. */}
-            <button
-              type="button"
-              className="dashboard-nav-action dashboard-nav-logout"
-              onClick={handleLogout}
-            >
-              <Icon name="logout" size={17} />
-              <span>Sign out</span>
             </button>
 
             <span
